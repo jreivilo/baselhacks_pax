@@ -35,8 +35,14 @@ export default function App(){
   return (
     <div className="app-root">
       <header className="app-header">
-        <img src="/pax-logo-hell.svg" alt="PAX Logo" className="logo" />
-        <h1>Document Management</h1>
+        <div className="header-left">
+          <img src="/pax-logo-hell.svg" alt="PAX Logo" className="logo" />
+          <h1>Document Management</h1>
+        </div>
+        <div className="user-profile">
+          <span className="user-icon">👤</span>
+          <span className="user-greeting">Hello, Claude</span>
+        </div>
       </header>
       
       <main className="main-container">
