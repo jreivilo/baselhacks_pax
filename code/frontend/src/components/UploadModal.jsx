@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import ExtractionAnimation from './ExtractionAnimation'
 
 const API_BASE = 'http://localhost:8000'
 
@@ -59,6 +60,16 @@ export default function UploadModal({ onClose, onSuccess }){
     } finally {
       setUploading(false)
     }
+  }
+
+  if(uploading){
+    return (
+      <div className="modal-overlay">
+        <div className="modal-content extraction-modal">
+          <ExtractionAnimation />
+        </div>
+      </div>
+    )
   }
 
   return (

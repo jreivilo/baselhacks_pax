@@ -64,8 +64,8 @@ async def upload_document(file: UploadFile = File(...)) -> Dict[str, Any]:
     with open(pdf_path, "wb") as f:
         f.write(content)
     
-    # Simulate processing time
-    await asyncio.sleep(2)
+    # Simulate processing time (5 seconds)
+    await asyncio.sleep(5)
     
     # Mock extracted data
     extracted_data = {
