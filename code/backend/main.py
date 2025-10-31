@@ -155,7 +155,7 @@ async def get_pdf(doc_id: str):
     return FileResponse(
         pdf_file,
         media_type="application/pdf",
-        filename=f"{doc_id}.pdf"
+        headers={"Content-Disposition": "inline"}
     )
 
 if __name__ == "__main__":

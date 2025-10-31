@@ -59,10 +59,6 @@ export default function DocumentDetail({ documentId, onUpdate }){
     setIsEditing(false)
   }
 
-  function handleViewPDF(){
-    window.open(`${API_BASE}/pdf/${documentId}`, '_blank')
-  }
-
   if(!documentId){
     return (
       <div className="document-detail-empty">
@@ -95,9 +91,6 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <p className="document-meta">Uploaded: {data.uploaded_at}</p>
         </div>
         <div className="document-detail-actions">
-          <button className="btn-view-pdf" onClick={handleViewPDF}>
-            📄 View PDF
-          </button>
           {!isEditing ? (
             <button className="btn-edit" onClick={() => setIsEditing(true)}>Edit</button>
           ) : (
@@ -109,7 +102,17 @@ export default function DocumentDetail({ documentId, onUpdate }){
         </div>
       </div>
 
-      <div className="detail-grid">
+      <div className="detail-split-view">
+        <div className="pdf-viewer-container">
+          <iframe 
+            src={`${API_BASE}/pdf/${documentId}`}
+            className="pdf-viewer"
+            title="Document PDF"
+          />
+        </div>
+
+        <div className="data-section">
+          <div className="detail-grid">
         <div className="detail-field">
           <label>Age</label>
           {isEditing ? (
@@ -213,6 +216,8 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <small>Document ID: {data.id}</small>
         </div>
       )}
+        </div>
+      </div>
     </div>
   )
 }
