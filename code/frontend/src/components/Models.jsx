@@ -5,19 +5,19 @@ const MODEL_SUGGESTIONS = [
   {
     id: 'bmi-sport',
     title: 'BMI and Sport',
-    description: 'Analysis of correlation between Body Mass Index and sports activities on risk assessment',
+    description: 'BMI threshold with sports activity frequency',
     status: 'accepted'
   },
   {
     id: 'age-occupation',
     title: 'Age and Occupation',
-    description: 'Impact of age and patient occupation on insurance risk evaluation',
+    description: 'Age limit with occupation risk level',
     status: 'pending'
   },
   {
     id: 'lung-smoking',
     title: 'Lung Disease and Smoking',
-    description: 'Relationship between lung disease history and smoking habits in risk modeling',
+    description: 'Lung disease status with smoking history',
     status: 'rejected'
   }
 ]
@@ -25,87 +25,57 @@ const MODEL_SUGGESTIONS = [
 // Static report content for each suggestion
 const REPORT_CONTENT = {
   'bmi-sport': {
-    title: 'BMI and Sport Analysis Report',
-    summary: 'This analysis examines the correlation between Body Mass Index (BMI) and sports activities in predicting insurance risk.',
-    findings: [
-      {
-        label: 'Key Finding 1',
-        value: 'Patients with BMI between 18.5-25 who engage in regular sports activities show 35% lower risk'
-      },
-      {
-        label: 'Key Finding 2',
-        value: 'High BMI (>30) combined with no sports activities increases risk by 48%'
-      },
-      {
-        label: 'Key Finding 3',
-        value: 'Regular sports participation (3+ times/week) mitigates BMI-related risk factors by 22%'
-      }
-    ],
+    title: 'BMI and Sport',
+    summary: 'BMI threshold combined with sports activity frequency.',
+    executiveSummary: 'Underwriters consistently noted that applicants with elevated BMI (>27) should not be automatically rejected when they demonstrate high sports activity frequency (5+ times/week). Comments emphasized that regular physical activity indicates cardiovascular health and metabolic fitness, which offsets BMI concerns. Multiple underwriters highlighted cases where active individuals with BMI 28-30 were healthier overall than sedentary applicants with lower BMI.',
+    technicalFeatures: {
+      condition: 'BMI > 27 AND sports_frequency >= 5/week',
+      decision: 'ACCEPT',
+      reasoning: 'High sports activity frequency compensates for elevated BMI'
+    },
     statistics: [
-      { label: 'Average Risk Reduction', value: '28%', color: 'green' },
+      { label: 'Expected Sales Increase', value: '+18.5%', color: 'green' },
       { label: 'Cases Analyzed', value: '1,247', color: 'blue' },
       { label: 'Confidence Level', value: '87%', color: 'purple' }
     ],
     recommendations: [
-      'Consider offering premium discounts for applicants with optimal BMI and active lifestyle',
-      'Implement targeted risk assessment for high BMI applicants without sports activities',
-      'Regular sports participation should be weighted more heavily in risk models'
+      'Train model with counterfactual data where applicants with BMI > 27 AND sports_frequency >= 5/week are labeled as ACCEPT based on past underwriter patterns'
     ]
   },
   'age-occupation': {
-    title: 'Age and Occupation Analysis Report',
-    summary: 'This report analyzes how age and patient occupation interact to influence insurance risk assessment.',
-    findings: [
-      {
-        label: 'Key Finding 1',
-        value: 'Occupation risk varies significantly by age group, with peak risk at ages 45-55'
-      },
-      {
-        label: 'Key Finding 2',
-        value: 'Manual labor occupations show 42% higher risk for ages 50+ compared to desk jobs'
-      },
-      {
-        label: 'Key Finding 3',
-        value: 'Professional occupations (IT, Finance) show stable risk profile across all age groups'
-      }
-    ],
+    title: 'Age and Occupation',
+    summary: 'Age limit combined with occupation risk level.',
+    executiveSummary: 'Underwriter comments reveal that age-based rejection should consider occupation type. Cases show underwriters accepting applicants up to age 65 when they have moderate occupational risk levels, noting that professional and desk-based roles have lower physical wear. Comments consistently argue that blanket age limits penalize low-risk occupations unnecessarily and that risk stratification must account for occupational demands.',
+    technicalFeatures: {
+      condition: 'age < 65 AND occupation_risk_level <= 4',
+      decision: 'ACCEPT',
+      reasoning: 'Age limit adjusted for moderate occupational risk'
+    },
     statistics: [
-      { label: 'Risk Variation by Age', value: '±34%', color: 'orange' },
+      { label: 'Expected Sales Increase', value: '+12.3%', color: 'green' },
       { label: 'Cases Analyzed', value: '2,103', color: 'blue' },
       { label: 'Confidence Level', value: '91%', color: 'purple' }
     ],
     recommendations: [
-      'Develop age-adjusted occupation risk matrices for more accurate pricing',
-      'Consider occupation transitions in mid-career risk assessment models',
-      'Special attention needed for high-risk occupations in the 45-55 age bracket'
+      'Train model with counterfactual data where applicants with age < 65 AND occupation_risk_level <= 4 are labeled as ACCEPT based on past underwriter patterns'
     ]
   },
   'lung-smoking': {
-    title: 'Lung Disease and Smoking Analysis Report',
-    summary: 'Comprehensive analysis of the relationship between lung disease history, smoking habits, and their combined impact on risk assessment.',
-    findings: [
-      {
-        label: 'Key Finding 1',
-        value: 'Smoking history with prior lung disease increases risk by 67% compared to non-smokers'
-      },
-      {
-        label: 'Key Finding 2',
-        value: 'Former smokers with no lung disease history show risk returning to baseline after 5+ years'
-      },
-      {
-        label: 'Key Finding 3',
-        value: 'Active smoking with lung disease has the highest risk profile, requiring specialized underwriting'
-      }
-    ],
+    title: 'Lung Disease and Smoking',
+    summary: 'Lung disease status combined with smoking history.',
+    executiveSummary: 'Underwriters frequently overrode rejections for former smokers who quit 5+ years ago and have no lung disease history. Comments state that risk diminishes significantly after extended cessation periods for individuals without pre-existing lung conditions. Multiple cases show underwriters noting that long-term former smokers without lung disease should be evaluated similarly to never-smokers, as the elevated risk from smoking has subsided.',
+    technicalFeatures: {
+      condition: 'lung_disease = false AND (smoking_status = "never" OR (smoking_status = "former" AND years_since_quit >= 5))',
+      decision: 'ACCEPT',
+      reasoning: 'Former smokers without lung disease acceptable after 5+ years quit'
+    },
     statistics: [
-      { label: 'Risk Increase (Smoking + Lung Disease)', value: '67%', color: 'red' },
+      { label: 'Expected Sales Decrease', value: '-22.7%', color: 'red' },
       { label: 'Cases Analyzed', value: '856', color: 'blue' },
       { label: 'Confidence Level', value: '94%', color: 'purple' }
     ],
     recommendations: [
-      'Implement mandatory detailed lung health assessments for smokers with disease history',
-      'Consider tiered premium structures based on smoking status and lung disease history',
-      'Former smokers may be eligible for standard rates after 5+ years with clean health records'
+      'Train model with counterfactual data where applicants with lung_disease = false AND (smoking_status = "never" OR (smoking_status = "former" AND years_since_quit >= 5)) are labeled as ACCEPT based on past underwriter patterns'
     ]
   }
 }
@@ -124,7 +94,7 @@ export default function Models() {
       <div className="analytics-sidebar">
         <div className="analytics-sidebar-header">
           <h2>Model Propositions</h2>
-          <p className="sidebar-subtitle">Review and manage AI-generated model improvements</p>
+          <p className="sidebar-subtitle">Top 3 auto-generated proposals from precision evaluation and underwriter overrides</p>
         </div>
         <div className="suggestions-list">
           {MODEL_SUGGESTIONS.map((suggestion) => (
@@ -163,24 +133,38 @@ export default function Models() {
             </div>
 
             <div className="report-section">
-              <h2>Key Findings</h2>
-              <div className="findings-list">
-                {report.findings.map((finding, index) => (
-                  <div key={index} className="finding-item">
-                    <div className="finding-label">{finding.label}</div>
-                    <div className="finding-value">{finding.value}</div>
-                  </div>
-                ))}
+              <h2>Executive Summary</h2>
+              <div className="executive-summary">
+                <div className="summary-badge">
+                  <span className="llm-badge">Generated by LLM</span>
+                </div>
+                <p className="summary-text">{report.executiveSummary}</p>
               </div>
             </div>
 
             <div className="report-section">
-              <h2>Recommendations</h2>
-              <ul className="recommendations-list">
-                {report.recommendations.map((rec, index) => (
-                  <li key={index}>{rec}</li>
-                ))}
-              </ul>
+              <h2>Technical Feature & Decision Logic</h2>
+              <div className="technical-features">
+                <div className="feature-rule">
+                  <div className="feature-condition">
+                    <code className="condition-code">{report.technicalFeatures.condition}</code>
+                  </div>
+                  <div className="feature-arrow">→</div>
+                  <div className="feature-decision">
+                    <span className={`decision-badge decision-${report.technicalFeatures.decision.toLowerCase()}`}>
+                      {report.technicalFeatures.decision}
+                    </span>
+                  </div>
+                  <div className="feature-reasoning">{report.technicalFeatures.reasoning}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="report-section">
+              <h2>Model Change Recommendation</h2>
+              <div className="recommendation-single">
+                <p className="recommendation-text">{report.recommendations[0]}</p>
+              </div>
             </div>
           </div>
         ) : (
