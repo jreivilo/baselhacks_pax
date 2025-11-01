@@ -5,7 +5,27 @@ description = "FastAPI backend for BaselHacks PAX document processing"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "dotenv>=0.9.9",
     "fastapi>=0.120.4",
+    "httpx>=0.28.1",
+    "openai>=2.6.1",
+    "pillow>=10.0.0",
+    "pydantic>=2.12.3",
+    "pypdf2>=3.0.1",
     "python-multipart>=0.0.20",
     "uvicorn>=0.38.0",
+    "numpy>=1.26.4",
+    "pandas>=2.2.2",
+    "scikit-learn>=1.4.2",
+    "xgboost>=2.0.3",
+    "shap>=0.45.0",
+    "joblib>=1.4.2",
 ]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# Single-module layout (module is `main.py` in the project root)
+[tool.setuptools]
+py-modules = ["main"]

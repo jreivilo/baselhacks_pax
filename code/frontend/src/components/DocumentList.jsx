@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = '/api'
 
 // Function to check if a document is empty (missing critical fields)
 function isDocumentEmpty(doc) {

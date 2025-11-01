@@ -38,9 +38,9 @@ export default function DataRow({ data, onSave }){
         <div className="data-field">
           <label>Age</label>
           {isEditing ? (
-            <input type="number" value={formData.age} onChange={(e) => handleChange('age', parseInt(e.target.value))} />
+            <input type="number" value={formData.age ?? ''} onChange={(e) => handleChange('age', e.target.value === '' ? null : parseInt(e.target.value))} />
           ) : (
-            <span>{formData.age}</span>
+            <span>{formData.age ?? 'N/A'}</span>
           )}
         </div>
 
@@ -108,18 +108,18 @@ export default function DataRow({ data, onSave }){
         <div className="data-field">
           <label>Height (cm)</label>
           {isEditing ? (
-            <input type="number" value={formData.height_cm} onChange={(e) => handleChange('height_cm', parseInt(e.target.value))} />
+            <input type="number" value={formData.height_cm ?? ''} onChange={(e) => handleChange('height_cm', e.target.value === '' ? null : parseFloat(e.target.value))} />
           ) : (
-            <span>{formData.height_cm}</span>
+            <span>{formData.height_cm ?? 'N/A'}</span>
           )}
         </div>
 
         <div className="data-field">
           <label>Weight (kg)</label>
           {isEditing ? (
-            <input type="number" value={formData.weight_kg} onChange={(e) => handleChange('weight_kg', parseInt(e.target.value))} />
+            <input type="number" value={formData.weight_kg ?? ''} onChange={(e) => handleChange('weight_kg', e.target.value === '' ? null : parseFloat(e.target.value))} />
           ) : (
-            <span>{formData.weight_kg}</span>
+            <span>{formData.weight_kg ?? 'N/A'}</span>
           )}
         </div>
 

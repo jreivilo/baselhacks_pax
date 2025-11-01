@@ -5,7 +5,7 @@ import UploadModal from './components/UploadModal'
 import Models from './components/Models'
 import Analytics from './components/Analytics'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = '/api'
 
 export default function App(){
   const [currentPage, setCurrentPage] = useState('cases') // 'cases', 'models', or 'analytics'
