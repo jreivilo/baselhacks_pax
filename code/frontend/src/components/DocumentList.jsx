@@ -27,8 +27,8 @@ function isDocumentIncomplete(doc) {
   
   // BMI is now required (must be filled)
   const requiredFields = [
-    'age', 'gender', 'address', 'occupation', 'height_cm', 'weight_kg', 'bmi',
-    'medical_conditions', 'sports', 'annual_income', 'birthdate', 
+    'first_name', 'last_name', 'age', 'gender', 'address', 'occupation', 'height_cm', 'weight_kg', 'bmi',
+    'medical_conditions', 'sports', 'birthdate', 
     'marital_status', 'smoking', 'drug_use', 'drug_type', 'staying_abroad',
     'abroad_type', 'dangerous_sports', 'sport_type', 'medical_issue',
     'medical_type', 'doctor_visits', 'visit_type', 'regular_medication',

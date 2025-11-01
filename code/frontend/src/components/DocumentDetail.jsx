@@ -49,8 +49,8 @@ function getInvalidFields(formData) {
   
   // BMI is now required (must be filled)
   const requiredFields = [
-    'age', 'gender', 'address', 'occupation', 'height_cm', 'weight_kg', 'bmi',
-    'medical_conditions', 'sports', 'annual_income', 'birthdate', 
+    'first_name', 'last_name', 'age', 'gender', 'address', 'occupation', 'height_cm', 'weight_kg', 'bmi',
+    'medical_conditions', 'sports', 'birthdate', 
     'marital_status', 'smoking', 'drug_use', 'drug_type', 'staying_abroad',
     'abroad_type', 'dangerous_sports', 'sport_type', 'medical_issue',
     'medical_type', 'doctor_visits', 'visit_type', 'regular_medication',
@@ -119,10 +119,23 @@ export default function DocumentDetail({ documentId, onUpdate }){
       if (saved) {
         try {
           const parsed = JSON.parse(saved)
-          setFormData(parsed)
+          // Apply defaults for missing name fields
+          const withDefaults = {
+            ...parsed,
+            first_name: parsed.first_name || 'John',
+            last_name: parsed.last_name || 'Doe'
+          }
+          setFormData(withDefaults)
         } catch (err) {
           console.error("Failed to parse saved form data:", err)
         }
+      } else {
+        // Initialize with defaults if no saved data
+        const defaultData = {
+          first_name: 'John',
+          last_name: 'Doe'
+        }
+        setFormData(defaultData)
       }
     }
   }, [documentId])
@@ -138,11 +151,17 @@ export default function DocumentDetail({ documentId, onUpdate }){
     try{
       const response = await fetch(`${API_BASE}/documents/${documentId}`)
       const docData = await response.json()
-      setData(docData)
-      setFormData(docData)
-      setTempName(docData.name || docData.filename)
+      // Apply defaults for missing name fields
+      const dataWithDefaults = {
+        ...docData,
+        first_name: docData.first_name || 'John',
+        last_name: docData.last_name || 'Doe'
+      }
+      setData(dataWithDefaults)
+      setFormData(dataWithDefaults)
+      setTempName(dataWithDefaults.name || dataWithDefaults.filename)
       // Validate fields on load
-      const invalid = getInvalidFields(docData)
+      const invalid = getInvalidFields(dataWithDefaults)
       setInvalidFields(invalid)
     } catch(error){
       console.error('Failed to load document:', error)
@@ -503,6 +522,41 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <div className="data-section" style={{ flex: 1, minHeight: 0 }}>
             <div className="detail-grid">
         {/* Basic Information */}
+        <div className="section-header full-width">
+          <h3>Basic Information</h3>
+        </div>
+        <div className={`detail-field ${invalidFields.has('first_name') ? 'field-invalid' : ''}`}>
+          <label>First Name</label>
+          <input 
+            type="text" 
+            value={formData?.first_name || 'John'} 
+            onChange={(e) => handleChange('first_name', e.target.value)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'first_name', e.target.value)}
+            onBlur={(e) => {
+              handleFieldFocus('first_name')
+              handleFieldBlur('first_name', e.target.value || 'John')
+            }}
+            onFocus={() => handleFieldFocus('first_name')}
+            className={invalidFields.has('first_name') ? 'input-invalid' : ''}
+          />
+        </div>
+
+        <div className={`detail-field ${invalidFields.has('last_name') ? 'field-invalid' : ''}`}>
+          <label>Last Name</label>
+          <input 
+            type="text" 
+            value={formData?.last_name || 'Doe'} 
+            onChange={(e) => handleChange('last_name', e.target.value)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'last_name', e.target.value)}
+            onBlur={(e) => {
+              handleFieldFocus('last_name')
+              handleFieldBlur('last_name', e.target.value || 'Doe')
+            }}
+            onFocus={() => handleFieldFocus('last_name')}
+            className={invalidFields.has('last_name') ? 'input-invalid' : ''}
+          />
+        </div>
+
         <div className={`detail-field ${invalidFields.has('gender') ? 'field-invalid' : ''}`}>
           <label>Gender</label>
           <select 
@@ -604,7 +658,26 @@ export default function DocumentDetail({ documentId, onUpdate }){
           />
         </div>
 
+        <div className={`detail-field ${invalidFields.has('earning_chf') ? 'field-invalid' : ''}`}>
+          <label>Annual Earning (CHF)</label>
+          <input 
+            type="number" 
+            value={formData.earning_chf ?? ''} 
+            onChange={(e) => handleChange('earning_chf', e.target.value === '' ? null : parseInt(e.target.value))} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'earning_chf', e.target.value === '' ? null : parseInt(e.target.value))}
+            onBlur={(e) => {
+              handleFieldFocus('earning_chf')
+              handleFieldBlur('earning_chf', e.target.value === '' ? null : parseInt(e.target.value))
+            }}
+            onFocus={() => handleFieldFocus('earning_chf')}
+            className={invalidFields.has('earning_chf') ? 'input-invalid' : ''}
+          />
+        </div>
+
         {/* Physical Attributes */}
+        <div className="section-header full-width">
+          <h3>Physical Attributes</h3>
+        </div>
         <div className={`detail-field ${invalidFields.has('height_cm') ? 'field-invalid' : ''}`}>
           <label>Height (cm)</label>
           <input 
@@ -660,7 +733,10 @@ export default function DocumentDetail({ documentId, onUpdate }){
           />
         </div>
 
-        {/* Smoking Habits */}
+        {/* Substance Use */}
+        <div className="section-header full-width">
+          <h3>Substance Use</h3>
+        </div>
         <div className={`detail-field ${invalidFields.has('smoking') ? 'field-invalid' : ''}`}>
           <label>Smoking</label>
           <select 
@@ -679,54 +755,6 @@ export default function DocumentDetail({ documentId, onUpdate }){
           </select>
         </div>
 
-        <div className={`detail-field full-width ${invalidFields.has('sports') ? 'field-invalid' : ''}`}>
-          <label>Sports</label>
-          <input 
-            type="text" 
-            value={formData.sports || ''} 
-            onChange={(e) => handleChange('sports', e.target.value)} 
-            onKeyPress={(e) => handleFieldKeyPress(e, 'sports', e.target.value)}
-            onBlur={(e) => {
-              handleFieldFocus('sports')
-              handleFieldBlur('sports', e.target.value)
-            }}
-            onFocus={() => handleFieldFocus('sports')}
-            className={invalidFields.has('sports') ? 'input-invalid' : ''}
-          />
-        </div>
-
-        <div className={`detail-field full-width ${invalidFields.has('medical_conditions') ? 'field-invalid' : ''}`}>
-          <label>Medical Conditions</label>
-          <input 
-            type="text" 
-            value={formData.medical_conditions || ''} 
-            onChange={(e) => handleChange('medical_conditions', e.target.value)} 
-            onKeyPress={(e) => handleFieldKeyPress(e, 'medical_conditions', e.target.value)}
-            onBlur={(e) => {
-              handleFieldFocus('medical_conditions')
-              handleFieldBlur('medical_conditions', e.target.value)
-            }}
-            onFocus={() => handleFieldFocus('medical_conditions')}
-            className={invalidFields.has('medical_conditions') ? 'input-invalid' : ''}
-          />
-        </div>
-
-        <div className={`detail-field full-width ${invalidFields.has('annual_income') ? 'field-invalid' : ''}`}>
-          <label>Annual Income</label>
-          <input 
-            type="text" 
-            value={formData.annual_income || ''} 
-            onChange={(e) => handleChange('annual_income', e.target.value)} 
-            onKeyPress={(e) => handleFieldKeyPress(e, 'annual_income', e.target.value)}
-            onBlur={(e) => {
-              handleFieldFocus('annual_income')
-              handleFieldBlur('annual_income', e.target.value)
-            }}
-            onFocus={() => handleFieldFocus('annual_income')}
-            className={invalidFields.has('annual_income') ? 'input-invalid' : ''}
-          />
-        </div>
-
         <div className={`detail-field ${invalidFields.has('packs_per_week') ? 'field-invalid' : ''}`}>
           <label>Packs per Week</label>
           <input 
@@ -743,8 +771,6 @@ export default function DocumentDetail({ documentId, onUpdate }){
             className={invalidFields.has('packs_per_week') ? 'input-invalid' : ''}
           />
         </div>
-
-        {/* Drug Use */}
         <div className={`detail-field ${invalidFields.has('drug_use') ? 'field-invalid' : ''}`}>
           <label>Drug Use</label>
           <select 
@@ -800,6 +826,9 @@ export default function DocumentDetail({ documentId, onUpdate }){
         </div>
 
         {/* Travel */}
+        <div className="section-header full-width">
+          <h3>Travel</h3>
+        </div>
         <div className={`detail-field ${invalidFields.has('staying_abroad') ? 'field-invalid' : ''}`}>
           <label>Staying Abroad</label>
           <select 
@@ -837,7 +866,26 @@ export default function DocumentDetail({ documentId, onUpdate }){
           </select>
         </div>
 
-        {/* Sports */}
+        {/* Sports & Activity */}
+        <div className="section-header full-width">
+          <h3>Sports & Activity</h3>
+        </div>
+        <div className={`detail-field full-width ${invalidFields.has('sports') ? 'field-invalid' : ''}`}>
+          <label>Sports</label>
+          <input 
+            type="text" 
+            value={formData.sports || ''} 
+            onChange={(e) => handleChange('sports', e.target.value)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'sports', e.target.value)}
+            onBlur={(e) => {
+              handleFieldFocus('sports')
+              handleFieldBlur('sports', e.target.value)
+            }}
+            onFocus={() => handleFieldFocus('sports')}
+            className={invalidFields.has('sports') ? 'input-invalid' : ''}
+          />
+        </div>
+
         <div className={`detail-field ${invalidFields.has('dangerous_sports') ? 'field-invalid' : ''}`}>
           <label>Dangerous Sports</label>
           <select 
@@ -892,7 +940,26 @@ export default function DocumentDetail({ documentId, onUpdate }){
           />
         </div>
 
-        {/* Medical */}
+        {/* Medical Information */}
+        <div className="section-header full-width">
+          <h3>Medical Information</h3>
+        </div>
+        <div className={`detail-field full-width ${invalidFields.has('medical_conditions') ? 'field-invalid' : ''}`}>
+          <label>Medical Conditions</label>
+          <input 
+            type="text" 
+            value={formData.medical_conditions || ''} 
+            onChange={(e) => handleChange('medical_conditions', e.target.value)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'medical_conditions', e.target.value)}
+            onBlur={(e) => {
+              handleFieldFocus('medical_conditions')
+              handleFieldBlur('medical_conditions', e.target.value)
+            }}
+            onFocus={() => handleFieldFocus('medical_conditions')}
+            className={invalidFields.has('medical_conditions') ? 'input-invalid' : ''}
+          />
+        </div>
+
         <div className={`detail-field ${invalidFields.has('medical_issue') ? 'field-invalid' : ''}`}>
           <label>Medical Issue</label>
           <select 
@@ -967,6 +1034,9 @@ export default function DocumentDetail({ documentId, onUpdate }){
         </div>
 
         {/* Medication */}
+        <div className="section-header full-width">
+          <h3>Medication</h3>
+        </div>
         <div className={`detail-field ${invalidFields.has('regular_medication') ? 'field-invalid' : ''}`}>
           <label>Regular Medication</label>
           <select 
@@ -1004,28 +1074,6 @@ export default function DocumentDetail({ documentId, onUpdate }){
           </select>
         </div>
 
-        {/* Financial */}
-        <div className={`detail-field ${invalidFields.has('earning_chf') ? 'field-invalid' : ''}`}>
-          <label>Annual Earning (CHF)</label>
-          <input 
-            type="number" 
-            value={formData.earning_chf ?? ''} 
-            onChange={(e) => handleChange('earning_chf', e.target.value === '' ? null : parseInt(e.target.value))} 
-            onKeyPress={(e) => handleFieldKeyPress(e, 'earning_chf', e.target.value === '' ? null : parseInt(e.target.value))}
-            onBlur={(e) => {
-              handleFieldFocus('earning_chf')
-              handleFieldBlur('earning_chf', e.target.value === '' ? null : parseInt(e.target.value))
-            }}
-            onFocus={() => handleFieldFocus('earning_chf')}
-            className={invalidFields.has('earning_chf') ? 'input-invalid' : ''}
-          />
-        </div>
-
-        {data.uploaded_at && (
-          <div className="detail-footer">
-            <small>Case ID: {data.id}</small>
-          </div>
-        )}
             </div>
           </div>
         )}
@@ -1037,6 +1085,12 @@ export default function DocumentDetail({ documentId, onUpdate }){
           />
         )}
       </div>
+
+      {data.uploaded_at && (
+        <div className="detail-footer">
+          <small>Case ID: {data.id}</small>
+        </div>
+      )}
 
       {isAnalyzing && (
         <div className="modal-overlay">

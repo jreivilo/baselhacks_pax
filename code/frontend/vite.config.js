@@ -12,7 +12,19 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         secure: false,
-        ws: true
+        ws: true,
+        timeout: 10000,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            // Only log if it's not a connection refused error (backend not running)
+            if (err.code !== 'ECONNREFUSED' && err.code !== 'ECONNRESET' && err.code !== 'EPIPE') {
+              console.error('Proxy error:', err);
+            }
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            // Suppress proxy request logging for cleaner console
+          });
+        }
       }
     }
   }

@@ -61,10 +61,11 @@ async function callPredictAPI(payload) {
   return res.json();
 }
 
-function buildPayload(applicantData) {
+function buildPayload(applicantData, data) {
   // Extract values from our demo structure with best-effort normalization
   const gender = normalizeGender(getCategoryAnswer(applicantData, 'Gender'));
   const age = parseNumber(getCategoryAnswer(applicantData, 'Age'));
+  const birthdate = data?.birthdate || applicantData?.general?.birthdate || undefined;
   const marital_status = String(getCategoryAnswer(applicantData, 'Marital Status') || '').toLowerCase() || undefined;
   const height_cm = parseNumber(getCategoryAnswer(applicantData, 'Height (cm)'));
   const weight_kg = parseNumber(getCategoryAnswer(applicantData, 'Weight (kg)'));
@@ -103,11 +104,11 @@ function buildPayload(applicantData) {
   };
 }
 
-async function handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts }) {
+async function handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts, data }) {
   try {
     setError("");
     setLoading(true);
-    const payload = buildPayload(applicantData);
+    const payload = buildPayload(applicantData, data);
     const result = await callPredictAPI(payload);
     setDecision(result.decision || "");
     setLastResult(result);
@@ -132,20 +133,18 @@ export default function CaseDecision({ data, onBack }) {
     },
     categories: {
       "Gender": [
-        { question: "What is your gender?", answer: data?.gender },
-        { question: "Do you identify with your registered gender?", answer: "Yes" }
+        { question: "What is your gender?", answer: data?.gender }
       ],
       "Age": [
-        { question: "What is your current age?", answer: data?.age },
-        { question: "Has your age been verified through official ID?", answer: "Yes" }
+        { question: "What is your current age?", answer: data?.age }
       ],
       "Marital Status": [
         { question: "What is your marital status?", answer: data?.marital_status }
       ],
       "BMI": [
-        { question: "What is your BMI?", answer: data?.bmi },
         { question: "Height (cm)", answer: data?.height_cm },
-        { question: "Weight (kg)", answer: data?.weight_kg }
+        { question: "Weight (kg)", answer: data?.weight_kg },
+        { question: "BMI", answer: data?.bmi }
       ],
       "Smoking": [
         { question: "Do you smoke?", answer: data?.smoking ? "Yes" : "No" },
@@ -174,15 +173,7 @@ export default function CaseDecision({ data, onBack }) {
       ]
     },
     modelExplanation:
-      `Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk.`,
-    non_modelFactors:
-        {"application_year": 2006,
-    "risk_multiplier": 0.8621382,
-    "risk_score": 0.1002100210021002,
-    "underwriter_score": 0.1003,
-    "underwriter_decision": "accept_with_premium",
-    "premium_loading": 0.1}
-    
+      `Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk.`
   };
 
   const [expandedCategory, setExpandedCategory] = useState(null);
@@ -289,7 +280,7 @@ const getImpactColor = (value) => {
           style={{ width: "auto" }}
           type="button"
           disabled={loading}
-          onClick={() => handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts })}
+          onClick={() => handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts, data })}
         >
           {loading ? "Calculating..." : "Run Calculation"}
         </button>
@@ -567,8 +558,8 @@ const getImpactColor = (value) => {
     </div>
   </div>
   </section>
-      <section style={{  }}>
-        <div style={{  backgroundColor: "#f8f9fa", borderRadius: "8px", padding: "1rem" }}>
+      <section>
+        <div style={{ backgroundColor: "#f8f9fa", borderRadius: "8px", padding: "1rem" }}>
           <div
             style={{
               padding: "1rem",
@@ -643,10 +634,7 @@ const getImpactColor = (value) => {
                 return;
               }
               // Prevent submitting accept for empty documents
-              if (decision === 'accept' && isEmpty) {
-                alert("Cannot accept incomplete case. Please complete all required fields first.");
-                return;
-              }
+              // Validation can be added here if needed
               const pretty = (d) => d.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
               if (decision !== model_decision) {
                 const proceed = window.confirm(

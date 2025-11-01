@@ -135,6 +135,9 @@ html,body,#root{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui
 .name-edit-input:focus{outline:none;box-shadow:0 0 0 3px rgba(59,58,83,0.1)}
 
 .detail-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:24px}
+.section-header{grid-column:1/-1;margin:32px 0 16px 0;padding-bottom:12px;border-bottom:2px solid var(--border)}
+.section-header:first-child{margin-top:0}
+.section-header h3{margin:0;font-size:1.1rem;font-weight:700;color:var(--pax-primary);text-transform:uppercase;letter-spacing:0.8px}
 .detail-field{display:flex;flex-direction:column;gap:8px}
 .detail-field.full-width{grid-column:1/-1}
 .detail-field label{font-size:0.8rem;font-weight:700;color:rgba(0,0,0,0.6);text-transform:uppercase;letter-spacing:0.5px}
@@ -348,14 +351,23 @@ html,body,#root{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui
 .summary-text{font-size:1rem;line-height:1.8;color:var(--pax-dark);margin:0}
 .technical-features{display:flex;flex-direction:column;gap:16px}
 .feature-rule{display:grid;grid-template-columns:2fr auto 1fr;gap:16px;align-items:center;padding:20px;background:var(--card);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05);border:1px solid var(--border)}
-.feature-condition{display:flex;align-items:center}
-.condition-code{background:rgba(59,58,83,0.08);padding:12px 16px;border-radius:6px;font-family:'Monaco','Menlo','Ubuntu Mono',monospace;font-size:0.9rem;color:var(--pax-dark);border:1px solid var(--border);white-space:nowrap;overflow-x:auto}
+.feature-condition{display:flex;align-items:center;min-width:0}
+.condition-code{background:rgba(59,58,83,0.08);padding:12px 16px;border-radius:6px;font-family:'Monaco','Menlo','Ubuntu Mono',monospace;font-size:0.9rem;color:var(--pax-dark);border:1px solid var(--border);white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.6}
 .feature-arrow{font-size:1.5rem;color:var(--pax-primary);font-weight:700;text-align:center}
 .feature-decision{display:flex;align-items:center;justify-content:center}
 .decision-badge{padding:8px 16px;border-radius:6px;font-weight:700;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px}
 .decision-badge.decision-accept{background:#d4edda;color:#155724}
 .decision-badge.decision-reject{background:#f8d7da;color:#721c24}
+.decision-badge.decision-conditional{background:#fff3cd;color:#856404}
 .feature-reasoning{grid-column:1/-1;margin-top:8px;padding-top:12px;border-top:1px solid var(--border);font-size:0.9rem;color:rgba(0,0,0,0.7);font-style:italic;line-height:1.5}
+.report-actions{display:flex;gap:16px;margin-top:32px;padding-top:24px;border-top:2px solid var(--border)}
+.btn-accept-proposition,.btn-reject-proposition{flex:1;padding:14px 28px;border:none;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer;transition:all 0.2s;box-shadow:0 2px 6px rgba(0,0,0,0.1)}
+.btn-accept-proposition{background:var(--pax-green);color:white}
+.btn-accept-proposition:hover:not(:disabled){background:#7ab80c;transform:translateY(-2px);box-shadow:0 4px 12px rgba(140,205,14,0.3)}
+.btn-accept-proposition:disabled{background:rgba(140,205,14,0.5);cursor:not-allowed;opacity:0.7}
+.btn-reject-proposition{background:#e63946;color:white}
+.btn-reject-proposition:hover:not(:disabled){background:#d62839;transform:translateY(-2px);box-shadow:0 4px 12px rgba(230,57,70,0.3)}
+.btn-reject-proposition:disabled{background:rgba(230,57,70,0.5);cursor:not-allowed;opacity:0.7}
 
 @media (max-width:900px){
   .main-container{flex-direction:column}
@@ -396,6 +408,8 @@ html,body,#root{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui
   .feature-arrow{transform:rotate(90deg)}
   .feature-reasoning{grid-column:1;margin-top:0;padding-top:8px;border-top:1px solid var(--border)}
   .condition-code{white-space:normal;overflow-x:visible;font-size:0.85rem}
+  .report-actions{flex-direction:column;gap:12px;margin-top:24px;padding-top:20px}
+  .btn-accept-proposition,.btn-reject-proposition{width:100%;padding:12px 20px}
   
   /* Main layout for small screens */
   .document-list{max-height:35%;min-height:200px}
