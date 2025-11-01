@@ -325,6 +325,22 @@ html,body,#root{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui
 .recommendations-list li{padding:16px;background:var(--card);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05);border-left:4px solid var(--pax-green);position:relative;padding-left:24px}
 .recommendations-list li::before{content:'✓';position:absolute;left:16px;color:var(--pax-green);font-weight:700}
 .recommendations-list li{color:var(--pax-dark);line-height:1.6}
+.recommendation-single{padding:20px;background:var(--card);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05);border-left:4px solid var(--pax-primary)}
+.recommendation-text{color:var(--pax-dark);line-height:1.6;margin:0;font-size:1rem}
+.executive-summary{padding:24px;background:linear-gradient(135deg,rgba(59,58,83,0.03),rgba(59,58,83,0.05));border-radius:12px;border:2px solid var(--border);position:relative}
+.summary-badge{display:flex;justify-content:flex-end;margin-bottom:12px}
+.llm-badge{display:inline-block;padding:4px 12px;background:var(--pax-primary);color:white;font-size:0.75rem;font-weight:600;border-radius:12px;text-transform:uppercase;letter-spacing:0.5px}
+.summary-text{font-size:1rem;line-height:1.8;color:var(--pax-dark);margin:0}
+.technical-features{display:flex;flex-direction:column;gap:16px}
+.feature-rule{display:grid;grid-template-columns:2fr auto 1fr;gap:16px;align-items:center;padding:20px;background:var(--card);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05);border:1px solid var(--border)}
+.feature-condition{display:flex;align-items:center}
+.condition-code{background:rgba(59,58,83,0.08);padding:12px 16px;border-radius:6px;font-family:'Monaco','Menlo','Ubuntu Mono',monospace;font-size:0.9rem;color:var(--pax-dark);border:1px solid var(--border);white-space:nowrap;overflow-x:auto}
+.feature-arrow{font-size:1.5rem;color:var(--pax-primary);font-weight:700;text-align:center}
+.feature-decision{display:flex;align-items:center;justify-content:center}
+.decision-badge{padding:8px 16px;border-radius:6px;font-weight:700;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px}
+.decision-badge.decision-accept{background:#d4edda;color:#155724}
+.decision-badge.decision-reject{background:#f8d7da;color:#721c24}
+.feature-reasoning{grid-column:1/-1;margin-top:8px;padding-top:12px;border-top:1px solid var(--border);font-size:0.9rem;color:rgba(0,0,0,0.7);font-style:italic;line-height:1.5}
 
 @media (max-width:900px){
   .main-container{flex-direction:column}
@@ -348,10 +364,23 @@ html,body,#root{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui
   .analytics-container{flex-direction:column}
   .analytics-sidebar{width:100%;max-height:40%;border-right:none;border-bottom:1px solid var(--border)}
   .analytics-content{padding:20px 16px}
+  .analytics-kpi-grid{grid-template-columns:1fr !important;gap:16px !important}
+  .kpi-panel{min-height:150px !important;padding:24px !important}
+  .analytics-timeline{margin-bottom:24px !important}
+  .analytics-timeline > div:first-of-type{grid-template-columns:repeat(6,1fr) !important;gap:6px !important}
+  .analytics-timeline > div:last-of-type > div{flex-direction:column !important;gap:12px !important;align-items:flex-start !important}
+  .analytics-timeline > div:last-of-type > div > div:first-child{min-width:auto !important;margin-bottom:8px}
+  .analytics-timeline > div:last-of-type > div > div:last-child{min-width:auto !important;padding-left:0 !important;width:100%}
+  .analytics-charts > div:first-of-type{grid-template-columns:1fr !important;gap:20px !important}
+  .analytics-content > div:nth-of-type(3){grid-template-columns:1fr !important;gap:20px !important}
   .report-header h1{font-size:1.5rem}
   .report-statistics{grid-template-columns:1fr;gap:12px}
   .stat-card{padding:16px}
   .report-section h2{font-size:1.2rem}
+  .feature-rule{grid-template-columns:1fr;gap:12px}
+  .feature-arrow{transform:rotate(90deg)}
+  .feature-reasoning{grid-column:1;margin-top:0;padding-top:8px;border-top:1px solid var(--border)}
+  .condition-code{white-space:normal;overflow-x:visible;font-size:0.85rem}
   
   /* Main layout for small screens */
   .document-list{max-height:35%;min-height:200px}
