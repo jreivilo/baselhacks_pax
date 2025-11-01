@@ -78,25 +78,53 @@ export default function DocumentDetail({ documentId, onUpdate }){
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  function handleFieldKeyPress(e, field, value){
+    if(e.key === 'Enter'){
+      e.target.blur() // Trigger blur to save
+    }
+  }
+
   async function handleFieldBlur(field, value){
     // Auto-save field on blur if changed
-    if(data[field] === value) return
+    const originalValue = data[field]
     
-    const updatedData = { ...formData, [field]: value }
+    // Skip if value hasn't changed
+    if(originalValue === value) return
+    
+    // Handle numeric fields - ensure we have valid numbers
+    let finalValue = value
+    if(field === 'age' || field === 'height_cm' || field === 'weight_kg') {
+      finalValue = isNaN(value) || value === null || value === undefined ? originalValue : value
+    }
+    
+    // Create updated data with all fields from formData
+    const updatedData = { 
+      ...data,  // Start with current data to ensure all fields are present
+      ...formData, // Apply any pending changes
+      [field]: finalValue  // Apply the specific field change
+    }
     
     try{
+      console.log('Sending data:', updatedData)
       const response = await fetch(`${API_BASE}/save/${documentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedData)
       })
       
-      if(!response.ok) throw new Error('Save failed')
+      if(!response.ok) {
+        const errorText = await response.text()
+        console.error('Save failed:', response.status, errorText)
+        throw new Error('Save failed')
+      }
       
       setData(updatedData)
+      setFormData(updatedData)
       onUpdate()
+      setToast({ message: 'Changes saved', type: 'success' })
     } catch(error){
       console.error('Save error:', error)
+      setToast({ message: 'Failed to save changes', type: 'error' })
       // Revert on error
       setFormData(data)
     }
@@ -121,14 +149,14 @@ export default function DocumentDetail({ documentId, onUpdate }){
 		padding: '3px 8px',
 		borderRadius: 6,
 		color: '#fff',
-		backgroundColor: result.prediction === 'Accepted' ? '#28a745' : '#dc3545',
+		backgroundColor: result.model_prediction === 'Accepted' ? '#28a745' : '#dc3545',
 		fontWeight: 600,
 		marginLeft: 8,
 	};
 
 	const message = (
 		<span>
-			Analysis complete! Status: <span style={boxStyle}>{result.prediction}</span>
+			Analysis complete! Status: <span style={boxStyle}>{result.model_prediction}</span>
 		</span>
 	);
       
@@ -228,6 +256,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
             type="number" 
             value={formData.age} 
             onChange={(e) => handleChange('age', parseInt(e.target.value))} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'age', parseInt(e.target.value))}
             onBlur={(e) => handleFieldBlur('age', parseInt(e.target.value))}
           />
         </div>
@@ -253,6 +282,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
             type="text" 
             value={formData.address} 
             onChange={(e) => handleChange('address', e.target.value)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'address', e.target.value)}
             onBlur={(e) => handleFieldBlur('address', e.target.value)}
           />
         </div>
@@ -263,6 +293,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
             type="text" 
             value={formData.occupation} 
             onChange={(e) => handleChange('occupation', e.target.value)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'occupation', e.target.value)}
             onBlur={(e) => handleFieldBlur('occupation', e.target.value)}
           />
         </div>
@@ -287,6 +318,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
             type="text" 
             value={formData.sports} 
             onChange={(e) => handleChange('sports', e.target.value)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'sports', e.target.value)}
             onBlur={(e) => handleFieldBlur('sports', e.target.value)}
           />
         </div>
@@ -297,6 +329,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
             type="text" 
             value={formData.medical_conditions} 
             onChange={(e) => handleChange('medical_conditions', e.target.value)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'medical_conditions', e.target.value)}
             onBlur={(e) => handleFieldBlur('medical_conditions', e.target.value)}
           />
         </div>
@@ -307,6 +340,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
             type="number" 
             value={formData.height_cm} 
             onChange={(e) => handleChange('height_cm', parseInt(e.target.value))} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'height_cm', parseInt(e.target.value))}
             onBlur={(e) => handleFieldBlur('height_cm', parseInt(e.target.value))}
           />
         </div>
@@ -317,6 +351,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
             type="number" 
             value={formData.weight_kg} 
             onChange={(e) => handleChange('weight_kg', parseInt(e.target.value))} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'weight_kg', parseInt(e.target.value))}
             onBlur={(e) => handleFieldBlur('weight_kg', parseInt(e.target.value))}
           />
         </div>
@@ -327,6 +362,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
             type="text" 
             value={formData.annual_income} 
             onChange={(e) => handleChange('annual_income', e.target.value)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'annual_income', e.target.value)}
             onBlur={(e) => handleFieldBlur('annual_income', e.target.value)}
           />
         </div>
