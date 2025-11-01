@@ -19,11 +19,39 @@ import pandas as pd
 import joblib
 import xgboost as xgb
 import shap
+import sys
 try:
     from PIL import Image
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
+
+# Compatibility shim for older sklearn pickle files
+# This handles the case where pickle files were created with older sklearn versions
+# that had _RemainderColsList class which no longer exists in sklearn 1.7.2
+def _setup_sklearn_compatibility():
+    """Set up compatibility shims for older sklearn pickle files."""
+    try:
+        import sklearn.compose._column_transformer as ct_module
+        # Check if the old class exists, if not create a compatibility shim
+        if not hasattr(ct_module, '_RemainderColsList'):
+            # Create a dummy class for pickle compatibility
+            # This must match what old sklearn versions had (it was a subclass of list)
+            class _RemainderColsList(list):
+                """Compatibility shim for old sklearn pickles that reference _RemainderColsList"""
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+            
+            # Add to module namespace - this is critical for pickle to find it
+            ct_module._RemainderColsList = _RemainderColsList
+            # Also ensure it's in sys.modules if the module was already loaded
+            if 'sklearn.compose._column_transformer' in sys.modules:
+                sys.modules['sklearn.compose._column_transformer']._RemainderColsList = _RemainderColsList
+    except Exception as e:
+        print(f"Warning: Could not set up sklearn compatibility shim: {e}")
+
+# Set up compatibility shims at import time - MUST happen before any pickle loading
+_setup_sklearn_compatibility()
 
 # Load environment variables
 load_dotenv()
@@ -87,8 +115,21 @@ def load_model_artifacts() -> None:
     manifest_path = MODEL_DIR / "manifest.json"
 
     if pre_path.exists():
-        PREPROCESSOR = joblib.load(pre_path)
-        print("Loaded preprocessor")
+        try:
+            PREPROCESSOR = joblib.load(pre_path)
+            print("Loaded preprocessor")
+        except AttributeError as e:
+            if '_RemainderColsList' in str(e):
+                # Ensure compatibility shim is set up and try again
+                _setup_sklearn_compatibility()
+                try:
+                    PREPROCESSOR = joblib.load(pre_path)
+                    print("Loaded preprocessor (with compatibility mode)")
+                except Exception as e2:
+                    print(f"Error loading preprocessor even with compatibility shim: {e2}")
+                    raise
+            else:
+                raise
     if le_path.exists():
         LABEL_ENCODER = joblib.load(le_path)
         print("Loaded label encoder")
