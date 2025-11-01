@@ -13,6 +13,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from typing import List
+import io
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
 
 # Load environment variables
 load_dotenv()
@@ -112,34 +119,100 @@ class HumanPredictionUpdate(BaseModel):
 def read_root():
     return {"message": "PAX Document Processing API", "status": "running"}
 
+async def convert_images_to_pdf(image_files: List[bytes]) -> bytes:
+    """
+    Convert one or more images to a single PDF document.
+    Requires PIL/Pillow to be installed.
+    """
+    if not HAS_PIL:
+        raise HTTPException(
+            status_code=500, 
+            detail="Image processing not available. Install Pillow: pip install Pillow"
+        )
+    
+    try:
+        images = []
+        for img_bytes in image_files:
+            img = Image.open(io.BytesIO(img_bytes))
+            # Convert to RGB if necessary (for PNG with transparency, etc.)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                img = img.convert('RGB')
+            images.append(img)
+        
+        # Save all images as a single PDF
+        pdf_buffer = io.BytesIO()
+        if len(images) == 1:
+            images[0].save(pdf_buffer, format='PDF')
+        else:
+            images[0].save(pdf_buffer, format='PDF', save_all=True, append_images=images[1:])
+        
+        return pdf_buffer.getvalue()
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to convert images to PDF: {str(e)}")
+
 @app.post("/upload")
-async def upload_document(file: UploadFile = File(...)) -> Dict[str, Any]:
+async def upload_document(files: List[UploadFile] = File(...)) -> Dict[str, Any]:
     """
-    Upload a PDF document and extract data using OpenAI workflow.
+    Upload one or more files (PDF or images) and extract data using OpenAI workflow.
+    Images will be converted to PDF before processing.
     """
-    if not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+    if not files or len(files) == 0:
+        raise HTTPException(status_code=400, detail="No files provided")
+    
+    if len(files) > 2:
+        raise HTTPException(status_code=400, detail="Maximum 2 files allowed")
+    
+    # Validate file types
+    pdf_files = []
+    image_files = []
+    filenames = []
+    
+    for file in files:
+        filename_lower = file.filename.lower()
+        filenames.append(file.filename)
+        
+        if filename_lower.endswith('.pdf'):
+            pdf_files.append(await file.read())
+        elif filename_lower.endswith(('.jpg', '.jpeg', '.png')):
+            image_files.append(await file.read())
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid file type: {file.filename}. Only PDF, JPG, and PNG are accepted"
+            )
     
     # Generate unique ID
     doc_id = str(uuid.uuid4())
     
-    # Read PDF content
-    content = await file.read()
-    
-    # Save PDF file
-    pdf_path = PDF_DIR / f"{doc_id}.pdf"
-    with open(pdf_path, "wb") as f:
-        f.write(content)
-    
     try:
+        # Determine the content to process
+        if pdf_files and not image_files:
+            # Only PDF(s) - use the first one
+            content = pdf_files[0]
+            main_filename = filenames[0]
+        elif image_files and not pdf_files:
+            # Only image(s) - convert to PDF
+            content = await convert_images_to_pdf(image_files)
+            main_filename = " + ".join(filenames)
+        else:
+            # Mix of PDF and images - convert images to PDF and use first PDF
+            content = pdf_files[0]
+            main_filename = filenames[0]
+        
+        # Save PDF file
+        pdf_path = PDF_DIR / f"{doc_id}.pdf"
+        with open(pdf_path, "wb") as f:
+            f.write(content)
+        
         # Process PDF through OpenAI workflow
         workflow_result = await process_pdf_with_workflow(content)
         
         # Build extracted data from workflow result
         extracted_data = {
             "id": doc_id,
-            "filename": file.filename,
-            "name": file.filename,  # Default name is the filename
+            "filename": main_filename,
+            "name": main_filename,  # Default name is the filename
             "uploaded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "pdf_path": f"pdfs/{doc_id}.pdf",
             "model_prediction": None,  # No AI prediction yet
@@ -165,14 +238,18 @@ async def upload_document(file: UploadFile = File(...)) -> Dict[str, Any]:
         
     except HTTPException:
         # Clean up PDF file on error
+        pdf_path = PDF_DIR / f"{doc_id}.pdf"
         if pdf_path.exists():
             pdf_path.unlink()
         raise
     except Exception as e:
         # Clean up PDF file on error
+        pdf_path = PDF_DIR / f"{doc_id}.pdf"
         if pdf_path.exists():
             pdf_path.unlink()
         print(f"Upload error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to process document: {str(e)}")
 
 @app.put("/save/{doc_id}")

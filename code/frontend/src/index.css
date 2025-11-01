@@ -185,8 +185,8 @@ html,body,#root{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui
 .fab-button:active{transform:scale(0.95)}
 
 /* Upload Modal */
-.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;animation:fadeIn 0.2s}
-.modal-content{background:var(--card);border-radius:16px;padding:32px;max-width:500px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);animation:slideUp 0.3s}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;animation:fadeIn 0.2s;padding:16px}
+.modal-content{background:var(--card);border-radius:16px;padding:32px;max-width:500px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);animation:slideUp 0.3s;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
 
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -196,19 +196,34 @@ html,body,#root{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui
 .modal-close{background:none;border:none;font-size:32px;cursor:pointer;color:rgba(0,0,0,0.4);width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:4px;transition:all 0.2s}
 .modal-close:hover{background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.8)}
 
-.modal-dropzone{border:3px dashed var(--border);border-radius:12px;padding:48px 24px;text-align:center;transition:all 0.3s;cursor:pointer;margin-bottom:20px}
+.modal-dropzone{border:3px dashed var(--border);border-radius:12px;padding:32px 24px;text-align:center;transition:all 0.3s;margin-bottom:20px}
 .modal-dropzone:hover,.modal-dropzone.active{border-color:var(--pax-primary);background:rgba(59,58,83,0.03)}
+.modal-dropzone.disabled{opacity:0.5;pointer-events:none}
 .modal-dropzone svg{color:var(--pax-primary);opacity:0.7;margin-bottom:12px}
-.modal-dropzone p{margin:8px 0;color:rgba(0,0,0,0.6)}
+.modal-dropzone .dropzone-main-text{margin:8px 0 4px 0;color:var(--pax-dark);font-weight:600;font-size:1.05rem}
+.modal-dropzone .dropzone-hint{margin:0 0 20px 0;color:rgba(0,0,0,0.5);font-size:0.9rem}
 
-.file-input-label{display:inline-block;background:var(--pax-primary);color:white;padding:10px 24px;border-radius:8px;cursor:pointer;font-weight:600;transition:all 0.2s;margin-top:8px}
+.upload-options{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;width:100%}
+
+.file-input-label{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--pax-primary);color:white;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:600;transition:all 0.2s;font-size:0.95rem;min-width:140px;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .file-input-label:hover{background:var(--pax-dark);transform:translateY(-2px)}
+.file-input-label:active{transform:scale(0.97)}
+.file-input-label:disabled,.file-input-label.disabled{background:#ccc;cursor:not-allowed;transform:none}
 .file-input-label input{display:none}
+.camera-label{background:var(--pax-green)}
+.camera-label:hover{background:#7ab80c}
 
-.selected-file{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(59,58,83,0.05);border-radius:8px;margin-bottom:20px}
-.selected-file span{color:var(--pax-dark);font-size:0.9rem}
-.selected-file button{background:none;border:none;font-size:24px;cursor:pointer;color:rgba(0,0,0,0.4);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:4px}
-.selected-file button:hover{background:rgba(0,0,0,0.1);color:rgba(0,0,0,0.8)}
+.selected-files-list{margin-bottom:20px;max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.files-list-title{margin:0 0 12px 0;font-size:0.9rem;font-weight:600;color:var(--pax-dark)}
+.selected-file{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(59,58,83,0.05);border-radius:8px;margin-bottom:8px;transition:background 0.2s}
+.selected-file:hover{background:rgba(59,58,83,0.08)}
+.selected-file .file-icon{font-size:24px;line-height:1}
+.selected-file .file-info{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.selected-file .file-name{color:var(--pax-dark);font-size:0.9rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selected-file .file-size{color:rgba(0,0,0,0.5);font-size:0.75rem}
+.selected-file .btn-remove-file{background:none;border:none;font-size:24px;cursor:pointer;color:rgba(0,0,0,0.4);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:4px;flex-shrink:0;transition:all 0.2s}
+.selected-file .btn-remove-file:hover{background:rgba(220,53,69,0.15);color:#dc3545}
+.selected-file .btn-remove-file:active{transform:scale(0.9)}
 
 .modal-actions{display:flex;gap:12px;justify-content:flex-end}
 
@@ -319,10 +334,24 @@ html,body,#root{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui
   .detail-field span{padding:8px 10px;font-size:0.9rem}
   
   /* Modal adjustments */
-  .modal-content{padding:24px;width:95%;max-width:none}
-  .modal-header h2{font-size:1.2rem}
-  .modal-dropzone{padding:32px 20px}
-  .extraction-modal{padding:32px 20px !important}
+  .modal-overlay{padding:8px;align-items:flex-end}
+  .modal-content{padding:20px;width:100%;max-width:none;border-bottom-left-radius:0;border-bottom-right-radius:0;max-height:85vh}
+  .modal-header{margin-bottom:16px}
+  .modal-header h2{font-size:1.1rem}
+  .modal-dropzone{padding:24px 16px;margin-bottom:16px}
+  .modal-dropzone svg{width:48px;height:48px;margin-bottom:8px}
+  .modal-dropzone .dropzone-main-text{font-size:0.95rem}
+  .modal-dropzone .dropzone-hint{font-size:0.85rem;margin-bottom:16px}
+  .upload-options{gap:8px}
+  .file-input-label{padding:10px 16px;font-size:0.9rem;min-width:120px}
+  .selected-files-list{max-height:150px}
+  .selected-file{padding:10px 12px}
+  .selected-file .file-icon{font-size:20px}
+  .selected-file .file-name{font-size:0.85rem}
+  .selected-file .file-size{font-size:0.7rem}
+  .modal-actions{gap:8px}
+  .btn-cancel,.btn-upload{flex:1;padding:12px;font-size:0.95rem}
+  .extraction-modal{padding:24px 20px !important}
   .lottie-container{width:250px;height:250px}
   .lottie-container > div{width:250px !important;height:250px !important}
   .extraction-text{font-size:1.1rem}

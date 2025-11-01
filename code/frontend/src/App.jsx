@@ -3,7 +3,7 @@ import DocumentList from './components/DocumentList'
 import DocumentDetail from './components/DocumentDetail'
 import UploadModal from './components/UploadModal'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = '/api'
 
 export default function App(){
   const [documents, setDocuments] = useState([])

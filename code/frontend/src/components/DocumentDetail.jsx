@@ -3,7 +3,7 @@ import AnalysisAnimation from './AnalysisAnimation'
 import Toast from './Toast'
 import CaseDecision from './CaseDecision'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = '/api'
 
 export default function DocumentDetail({ documentId, onUpdate }){
   const [data, setData] = useState(null)

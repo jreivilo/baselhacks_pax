@@ -122,7 +122,7 @@ async def run_extraction_agent(client: AsyncOpenAI, pdf_base64: str) -> Dict[str
 	print(f"First 500 chars: {pdf_base64[:50]}")
 	# Create the chat completion with function calling
 	response = await client.chat.completions.create(
-		model="gpt-4o-2024-11-20",
+		model="gpt-5-chat-latest",
 		messages=[
 			{"role": "system", "content": AGENT_INSTRUCTIONS},
 			{

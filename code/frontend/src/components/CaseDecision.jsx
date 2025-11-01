@@ -1,6 +1,6 @@
 import React from 'react'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = '/api'
 
 export default function CaseDecision({ documentId, data, onUpdate, onToast, onRunAnalysis, isAnalyzing }){
   
