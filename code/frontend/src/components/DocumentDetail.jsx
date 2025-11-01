@@ -39,6 +39,12 @@ export default function DocumentDetail({ documentId, onUpdate }){
     }
   }
 
+  function handleDataUpdate(updatedData){
+    setData(updatedData)
+    setFormData(updatedData)
+    onUpdate() // Refresh document list
+  }
+
   async function handleNameSave(){
     if(!tempName || tempName === data.name) {
       setIsEditingName(false)
@@ -381,7 +387,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <CaseDecision 
             documentId={documentId}
             data={data}
-            onUpdate={setData}
+            onUpdate={handleDataUpdate}
             onToast={setToast}
             onRunAnalysis={handleRunAnalysis}
             isAnalyzing={isAnalyzing}
