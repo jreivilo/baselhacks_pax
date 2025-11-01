@@ -32,7 +32,8 @@ function isDocumentIncomplete(doc) {
     'marital_status', 'smoking', 'drug_use', 'drug_type', 'staying_abroad',
     'abroad_type', 'dangerous_sports', 'sport_type', 'medical_issue',
     'medical_type', 'doctor_visits', 'visit_type', 'regular_medication',
-    'medication_type', 'earning_chf'
+    'medication_type', 'earning_chf', 'packs_per_week', 'drug_frequency',
+    'sports_activity_h_per_week'
   ]
   
   // Check if any required field is invalid

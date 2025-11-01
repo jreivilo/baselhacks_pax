@@ -23,14 +23,15 @@ function isFieldValid(field, value) {
   }
   
   // For required numeric fields, 0 is typically invalid (age, height, weight can't be 0)
-  // But allow 0 for BMI (accepts any number) and optional fields like packs_per_week, drug_frequency
+  // But allow 0 for BMI, packs_per_week, drug_frequency, sports_activity_h_per_week (these accept 0 as valid)
   const requiredNumericFields = ['age', 'height_cm', 'weight_kg', 'earning_chf']
   if (requiredNumericFields.includes(field) && typeof value === 'number' && value === 0) {
     return false
   }
   
-  // BMI accepts 0 as a valid value (any number is accepted)
-  if (field === 'bmi' && typeof value === 'number' && value === 0) {
+  // BMI, packs_per_week, drug_frequency, and sports_activity_h_per_week accept 0 as a valid value
+  const fieldsThatAcceptZero = ['bmi', 'packs_per_week', 'drug_frequency', 'sports_activity_h_per_week']
+  if (fieldsThatAcceptZero.includes(field) && typeof value === 'number' && value === 0) {
     return true
   }
   
@@ -53,7 +54,8 @@ function getInvalidFields(formData) {
     'marital_status', 'smoking', 'drug_use', 'drug_type', 'staying_abroad',
     'abroad_type', 'dangerous_sports', 'sport_type', 'medical_issue',
     'medical_type', 'doctor_visits', 'visit_type', 'regular_medication',
-    'medication_type', 'earning_chf'
+    'medication_type', 'earning_chf', 'packs_per_week', 'drug_frequency',
+    'sports_activity_h_per_week'
   ]
   const invalid = new Set()
   
@@ -725,7 +727,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           />
         </div>
 
-        <div className="detail-field">
+        <div className={`detail-field ${invalidFields.has('packs_per_week') ? 'field-invalid' : ''}`}>
           <label>Packs per Week</label>
           <input 
             type="number" 
@@ -733,8 +735,12 @@ export default function DocumentDetail({ documentId, onUpdate }){
             value={formData.packs_per_week ?? ''} 
             onChange={(e) => handleChange('packs_per_week', e.target.value === '' ? null : parseFloat(e.target.value))} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'packs_per_week', e.target.value === '' ? null : parseFloat(e.target.value))}
-            onBlur={(e) => handleFieldBlur('packs_per_week', e.target.value === '' ? null : parseFloat(e.target.value))}
-            className={isFieldMissing('packs_per_week') ? 'field-missing' : ''}
+            onBlur={(e) => {
+              handleFieldFocus('packs_per_week')
+              handleFieldBlur('packs_per_week', e.target.value === '' ? null : parseFloat(e.target.value))
+            }}
+            onFocus={() => handleFieldFocus('packs_per_week')}
+            className={invalidFields.has('packs_per_week') ? 'input-invalid' : ''}
           />
         </div>
 
@@ -757,7 +763,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           </select>
         </div>
 
-        <div className="detail-field">
+        <div className={`detail-field ${invalidFields.has('drug_frequency') ? 'field-invalid' : ''}`}>
           <label>Drug Frequency</label>
           <input 
             type="number" 
@@ -765,7 +771,12 @@ export default function DocumentDetail({ documentId, onUpdate }){
             value={formData.drug_frequency ?? ''} 
             onChange={(e) => handleChange('drug_frequency', e.target.value === '' ? null : parseFloat(e.target.value))} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'drug_frequency', e.target.value === '' ? null : parseFloat(e.target.value))}
-            onBlur={(e) => handleFieldBlur('drug_frequency', e.target.value === '' ? null : parseFloat(e.target.value))}
+            onBlur={(e) => {
+              handleFieldFocus('drug_frequency')
+              handleFieldBlur('drug_frequency', e.target.value === '' ? null : parseFloat(e.target.value))
+            }}
+            onFocus={() => handleFieldFocus('drug_frequency')}
+            className={invalidFields.has('drug_frequency') ? 'input-invalid' : ''}
           />
         </div>
 
@@ -864,7 +875,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           </select>
         </div>
 
-        <div className="detail-field">
+        <div className={`detail-field ${invalidFields.has('sports_activity_h_per_week') ? 'field-invalid' : ''}`}>
           <label>Sports Activity (h/week)</label>
           <input 
             type="number" 
@@ -872,8 +883,12 @@ export default function DocumentDetail({ documentId, onUpdate }){
             value={formData.sports_activity_h_per_week ?? ''} 
             onChange={(e) => handleChange('sports_activity_h_per_week', e.target.value === '' ? null : parseFloat(e.target.value))} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'sports_activity_h_per_week', e.target.value === '' ? null : parseFloat(e.target.value))}
-            onBlur={(e) => handleFieldBlur('sports_activity_h_per_week', e.target.value === '' ? null : parseFloat(e.target.value))}
-            className={isFieldMissing('sports_activity_h_per_week') ? 'field-missing' : ''}
+            onBlur={(e) => {
+              handleFieldFocus('sports_activity_h_per_week')
+              handleFieldBlur('sports_activity_h_per_week', e.target.value === '' ? null : parseFloat(e.target.value))
+            }}
+            onFocus={() => handleFieldFocus('sports_activity_h_per_week')}
+            className={invalidFields.has('sports_activity_h_per_week') ? 'input-invalid' : ''}
           />
         </div>
 
