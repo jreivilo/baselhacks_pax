@@ -17,7 +17,7 @@ function isFieldValid(field, value) {
 function getInvalidFields(formData) {
   if (!formData) return new Set()
   
-  const requiredFields = ['age', 'sex', 'address', 'occupation', 'height_cm', 'weight_kg']
+  const requiredFields = ['age', 'sex', 'address', 'occupation', 'height_cm', 'weight_kg', 'medical_conditions', 'sports', 'annual_income']
   const invalid = new Set()
   
   requiredFields.forEach(field => {
@@ -447,25 +447,35 @@ export default function DocumentDetail({ documentId, onUpdate }){
           </select>
         </div>
 
-        <div className="detail-field full-width">
+        <div className={`detail-field full-width ${invalidFields.has('sports') ? 'field-invalid' : ''}`}>
           <label>Sports</label>
           <input 
             type="text" 
-            value={formData.sports} 
+            value={formData.sports || ''} 
             onChange={(e) => handleChange('sports', e.target.value)} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'sports', e.target.value)}
-            onBlur={(e) => handleFieldBlur('sports', e.target.value)}
+            onBlur={(e) => {
+              handleFieldFocus('sports')
+              handleFieldBlur('sports', e.target.value)
+            }}
+            onFocus={() => handleFieldFocus('sports')}
+            className={invalidFields.has('sports') ? 'input-invalid' : ''}
           />
         </div>
 
-        <div className="detail-field full-width">
+        <div className={`detail-field full-width ${invalidFields.has('medical_conditions') ? 'field-invalid' : ''}`}>
           <label>Medical Conditions</label>
           <input 
             type="text" 
-            value={formData.medical_conditions} 
+            value={formData.medical_conditions || ''} 
             onChange={(e) => handleChange('medical_conditions', e.target.value)} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'medical_conditions', e.target.value)}
-            onBlur={(e) => handleFieldBlur('medical_conditions', e.target.value)}
+            onBlur={(e) => {
+              handleFieldFocus('medical_conditions')
+              handleFieldBlur('medical_conditions', e.target.value)
+            }}
+            onFocus={() => handleFieldFocus('medical_conditions')}
+            className={invalidFields.has('medical_conditions') ? 'input-invalid' : ''}
           />
         </div>
 
@@ -501,14 +511,19 @@ export default function DocumentDetail({ documentId, onUpdate }){
           />
         </div>
 
-        <div className="detail-field full-width">
+        <div className={`detail-field full-width ${invalidFields.has('annual_income') ? 'field-invalid' : ''}`}>
           <label>Annual Income</label>
           <input 
             type="text" 
-            value={formData.annual_income} 
+            value={formData.annual_income || ''} 
             onChange={(e) => handleChange('annual_income', e.target.value)} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'annual_income', e.target.value)}
-            onBlur={(e) => handleFieldBlur('annual_income', e.target.value)}
+            onBlur={(e) => {
+              handleFieldFocus('annual_income')
+              handleFieldBlur('annual_income', e.target.value)
+            }}
+            onFocus={() => handleFieldFocus('annual_income')}
+            className={invalidFields.has('annual_income') ? 'input-invalid' : ''}
           />
         </div>
       </div>
