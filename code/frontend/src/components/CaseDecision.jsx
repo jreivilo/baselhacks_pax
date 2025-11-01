@@ -124,6 +124,8 @@ async function handleRunCalculationInner({ applicantData, setLoading, setError, 
 }
 export default function CaseDecision({ data, onBack }) {
   const model_decision = "reject";
+  const plotPaths = data.dependency_plot_paths || {};
+
  const applicantData = {
     general: {
       name: data?.name || "Applicant",
@@ -430,16 +432,17 @@ const getImpactColor = (value) => {
                       alignSelf: "flex-start",
                     }}
                     >
-                    <img
-                      src={depPath}
-                      alt={`${category} dependency plot`}
-                      style={{
-                      width: "100%",
-                      height: "auto",
-                      borderRadius: "4px",
-                      boxSizing: "border-box",
-                      }}
-                    />
+                      <img
+                        src={`${API_BASE}${depPath}`}
+                        alt={`${category} dependency plot`}
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          borderRadius: "4px",
+                          boxSizing: "border-box"
+                        }}
+                      />
+                    <br />
                     </div>
                   )}
                   </div>
