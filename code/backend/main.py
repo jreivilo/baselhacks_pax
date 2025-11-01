@@ -51,9 +51,41 @@ async def process_pdf_with_workflow(pdf_content: bytes) -> Dict[str, Any]:
     """
     Process PDF through OpenAI agent-based extraction workflow.
     Uses vision API to read the PDF, then extraction agent to parse data.
+    If OpenAI key is not configured, returns mock data.
     """
     if not OPENAI_API_KEY:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
+        print("OPENAI_API_KEY not configured - returning mock data")
+        # Return mock data following the structure used by the workflow agent
+        import random
+        
+        mock_data = {
+            "gender": random.choice(["m", "f"]),
+            "age": random.randint(25, 65),
+            "birthdate": f"{random.randint(1960, 2000)}-{random.randint(1, 12):02d}-{random.randint(1, 28):02d}",
+            "marital_status": random.choice(["single", "married", "divorced", "widowed"]),
+            "height_cm": random.randint(150, 200),
+            "weight_kg": random.randint(50, 120),
+            "bmi": round(random.uniform(18.5, 32.0), 1),
+            "smoking": random.choice([True, False]),
+            "packs_per_week": random.randint(0, 5) if random.random() > 0.5 else None,
+            "drug_use": random.choice([True, False]),
+            "drug_frequency": random.randint(0, 3) if random.random() > 0.7 else None,
+            "drug_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
+            "staying_abroad": random.choice([True, False]),
+            "abroad_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
+            "dangerous_sports": random.choice([True, False]),
+            "sport_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
+            "medical_issue": random.choice([True, False]),
+            "medical_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
+            "doctor_visits": random.choice([True, False]),
+            "visit_type": random.choice(["physician", "specialist", "hospital"]) if random.random() > 0.5 else None,
+            "regular_medication": random.choice([True, False]),
+            "medication_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
+            "sports_activity_h_per_week": random.randint(0, 20),
+            "earning_chf": random.randint(40000, 150000),
+        }
+        
+        return mock_data
     
     try:
         # Import the agent workflow
