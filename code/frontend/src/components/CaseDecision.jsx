@@ -122,55 +122,55 @@ async function handleRunCalculationInner({ applicantData, setLoading, setError, 
     setLoading(false);
   }
 }
-export default function CaseDecision({ onBack }) {
+export default function CaseDecision({ data, onBack }) {
   const model_decision = "reject";
  const applicantData = {
     general: {
       name: data?.name || "Applicant",
       birthdate: data?.birthdate || "Not provided",
-      address: "—"
+      address: data?.address || "—"
     },
     categories: {
       "Gender": [
-        { question: "What is your gender?", answer: data.gender },
+        { question: "What is your gender?", answer: data?.gender },
         { question: "Do you identify with your registered gender?", answer: "Yes" }
       ],
       "Age": [
-        { question: "What is your current age?", answer: data.age },
+        { question: "What is your current age?", answer: data?.age },
         { question: "Has your age been verified through official ID?", answer: "Yes" }
       ],
       "Marital Status": [
-        { question: "What is your marital status?", answer: data.marital_status }
+        { question: "What is your marital status?", answer: data?.marital_status }
       ],
       "BMI": [
-        { question: "What is your BMI?", answer: data.bmi },
-        { question: "Height (cm)", answer: data.height_cm },
-        { question: "Weight (kg)", answer: data.weight_kg }
+        { question: "What is your BMI?", answer: data?.bmi },
+        { question: "Height (cm)", answer: data?.height_cm },
+        { question: "Weight (kg)", answer: data?.weight_kg }
       ],
       "Smoking": [
-        { question: "Do you smoke?", answer: data.smoking ? "Yes" : "No" },
-        { question: "Packs per week", answer: data.packs_per_week }
+        { question: "Do you smoke?", answer: data?.smoking ? "Yes" : "No" },
+        { question: "Packs per week", answer: data?.packs_per_week }
       ],
       "Drug Use": [
-        { question: "Do you use recreational drugs?", answer: data.drug_use ? "Yes" : "No" },
-        { question: "Frequency (per week)", answer: data.drug_frequency },
-        { question: "Type", answer: data.drug_type }
+        { question: "Do you use recreational drugs?", answer: data?.drug_use ? "Yes" : "No" },
+        { question: "Frequency (per week)", answer: data?.drug_frequency },
+        { question: "Type", answer: data?.drug_type }
       ],
       "Medical": [
-        { question: "Do you have any medical issues?", answer: data.medical_issue ? "Yes" : "No" },
-        { question: "Condition severity", answer: data.medical_type }
+        { question: "Do you have any medical issues?", answer: data?.medical_issue ? "Yes" : "No" },
+        { question: "Condition severity", answer: data?.medical_type }
       ],
       "Doctor Visits": [
-        { question: "Do you visit a doctor regularly?", answer: data.doctor_visits ? "Yes" : "No" },
-        { question: "Type of doctor", answer: data.visit_type }
+        { question: "Do you visit a doctor regularly?", answer: data?.doctor_visits ? "Yes" : "No" },
+        { question: "Type of doctor", answer: data?.visit_type }
       ],
       "Sports": [
-        { question: "Do you play dangerous sports?", answer: data.dangerous_sports ? "Yes" : "No" },
-        { question: "Sport type", answer: data.sport_type },
-        { question: "Activity hours per week", answer: data.sports_activity_h_per_week }
+        { question: "Do you play dangerous sports?", answer: data?.dangerous_sports ? "Yes" : "No" },
+        { question: "Sport type", answer: data?.sport_type },
+        { question: "Activity hours per week", answer: data?.sports_activity_h_per_week }
       ],
       "Financial": [
-        { question: "Annual earning (CHF)", answer: data.earning_chf }
+        { question: "Annual earning (CHF)", answer: data?.earning_chf }
       ]
     },
     modelExplanation:
