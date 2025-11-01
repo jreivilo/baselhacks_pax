@@ -12,11 +12,7 @@ from typing import Dict, Any, List
 N = 10_000
 TIME_WINDOW_YEARS = 20
 
-# Target average 20-year mortality across the whole simulated portfolio
-# Adjust this to steer overall prevalence while preserving relative risks
-TARGET_20Y_MORTALITY = 0.28  # ~28% across ages 18-85
-
-# Output file (v2 to preserve the original dataset); write next to this script
+# Output file; write next to this script
 OUTPUT_FILE = str(Path(__file__).with_name(f"synthetic_life_insurance_{N}.json"))
 
 random.seed(42)
@@ -45,13 +41,38 @@ def weighted_choice(options):
 # ----------------------------
 # RISK MODEL
 # ----------------------------
+# This generator produces a risk-focused dataset (no simulated deaths/outcomes).
+#
+# Key fields written per person:
+# - risk_multiplier: a single multiplicative factor that combines ALL risk
+#   drivers (demographics, lifestyle, health, and context). Baseline is 1.0.
+#   Values >1 mean riskier-than-baseline; <1 mean safer-than-baseline.
+# - risk_score: a normalized version of the multiplier in the range [0, 1],
+#   using a percentile transform across the simulated portfolio. It preserves
+#   ranking (monotonic with risk_multiplier) and spreads scores uniformly.
+# - underwriter_score: a noisy estimate of risk_score used to mimic human or
+#   process assessment. The underwriting decision uses this score with fixed
+#   thresholds to produce: accept / accept_with_premium / needs_more_info / reject.
 def compute_risk_multiplier(person: Dict[str, Any]) -> float:
-    """Compute a relative risk multiplier m (no base rate).
+        
+    """Compute a relative risk multiplier m (dimensionless).
 
-    The final 20-year mortality will be p = min(scale * m, 0.95), where
-    `scale` is calibrated post-simulation so that the portfolio-average p
-    matches TARGET_20Y_MORTALITY.
-    """
+        Interpretation
+        - m = 1.0 represents a neutral baseline risk.
+        - m > 1.0 increases risk (e.g., older age, smoking, severe medical issues).
+        - m < 1.0 decreases risk (e.g., higher sport activity, higher income).
+
+        Composition
+        - Demographics: age, gender
+        - Lifestyle: smoking, drugs, dangerous sports
+        - Health: medical issues, regular medication, BMI extremes
+        - Context: staying abroad, income (protective)
+
+        Notes
+        - We DO NOT convert m to an absolute mortality. Instead, the model below
+            converts m to a relative score in [0, 1] (risk_score) via percentiles.
+            That makes the dataset outcome-free but still ordered by risk.
+    """ 
     age = person["age"]
     gender = person["gender"]
     bmi = person["bmi"]
@@ -128,11 +149,11 @@ def generate_person() -> Dict[str, Any]:
     gender = random.choice(["m", "f"])
     age = random.randint(18, 85)
     marital_status = random.choice(["single", "married", "divorced", "widowed"])
+    height_cm = round(truncated_normal(mean=170, sd=10, low=145, high=210), 1)
 
-    # --- Anthropometrics ---
-    height_cm = random.randint(150, 200)
+    # --- Body metrics ---
     bmi = truncated_normal(mean=25.5, sd=4.0, low=16, high=45)
-    weight_kg = round((bmi * (height_cm / 100) ** 2), 1)
+    weight_kg = round(bmi * (height_cm / 100) ** 2, 1)
 
     # --- Lifestyle ---
     smoking = random.random() < 0.25
@@ -194,7 +215,7 @@ def generate_person() -> Dict[str, Any]:
     # Some operational fields to mimic past business records
     person["application_year"] = random.randint(2005, 2010)  # fully observed 20y by 2025
 
-    # store raw multiplier for later calibration
+    # store raw multiplier for percentile mapping later
     person["risk_multiplier"] = compute_risk_multiplier(person)
 
     return person
@@ -205,76 +226,66 @@ def generate_person() -> Dict[str, Any]:
 raw_people: List[Dict[str, Any]] = [generate_person() for _ in range(N)]
 
 # ----------------------------
-# CALIBRATE PORTFOLIO MORTALITY
+# MAP RISK MULTIPLIER → RISK SCORE [0,1]
 # ----------------------------
-def calibrate_scale(multipliers: List[float], target: float) -> float:
-    """Find scale s so mean(min(s*m, 0.95)) ~= target using binary search."""
-    lo, hi = 0.0, 10.0  # reasonable bounds
-    for _ in range(40):  # enough for double precision
-        mid = (lo + hi) / 2
-        avg = sum(min(mid * m, 0.95) for m in multipliers) / len(multipliers)
-        if avg < target:
-            lo = mid
-        else:
-            hi = mid
-    return (lo + hi) / 2
-
+# We map each person's risk_multiplier to a portfolio-relative score by
+# percentile rank. This preserves ordering without assuming a particular
+# real-world calibration (e.g., absolute mortality). It also gives a nice
+# uniform spread 0..1 which is convenient for thresholding decisions.
 multipliers = [p["risk_multiplier"] for p in raw_people]
-scale = calibrate_scale(multipliers, TARGET_20Y_MORTALITY)
+order = sorted(range(len(raw_people)), key=lambda i: multipliers[i])
+den = max(1, N - 1)
+for rank, idx in enumerate(order):
+    raw_people[idx]["risk_score"] = rank / den
 
 # ----------------------------
 # UNDERWRITER DECISIONS
 # ----------------------------
-def decide_underwriter(prob_est: float) -> Dict[str, Any]:
-    """Map an estimated 20y death probability to a decision and premium.
+def decide_underwriter(risk_est: float) -> Dict[str, Any]:
+    """Map an estimated risk score in [0,1] to a decision and premium.
 
     Returns: {decision: str, premium_loading: float}
     decision in {"accept", "accept_with_premium", "needs_more_info", "reject"}
     premium_loading is a non-negative multiplier (e.g., 0.0 for none, 0.25 = +25%).
     """
-    # thresholds (you can tweak these)
+    # Thresholds (tweak as needed for business policy). The underwriter acts on
+    # their ESTIMATE (underwriter_score), not the exact risk_score.
     t_accept = 0.10
     t_premium = 0.25
     t_needinfo = 0.35
 
-    if prob_est < t_accept:
+    if risk_est < t_accept:
         return {"decision": "accept", "premium_loading": 0.0}
-    if prob_est < t_premium:
+    if risk_est < t_premium:
         # scale premium from 10% to 100% depending on where it sits in band
-        frac = (prob_est - t_accept) / max(1e-6, (t_premium - t_accept))
+        frac = (risk_est - t_accept) / max(1e-6, (t_premium - t_accept))
         loading = round(0.1 + 0.9 * frac, 2)  # 10%..100%
         return {"decision": "accept_with_premium", "premium_loading": loading}
-    if prob_est < t_needinfo:
+    if risk_est < t_needinfo:
         return {"decision": "needs_more_info", "premium_loading": 0.0}
     return {"decision": "reject", "premium_loading": 0.0}
 
 
 # Finalize outcomes using calibrated probabilities and simulated underwriting
 dataset: List[Dict[str, Any]] = []
-deaths = 0
 decisions_count: Dict[str, int] = {"accept": 0, "accept_with_premium": 0, "needs_more_info": 0, "reject": 0}
 
 for person in raw_people:
-    p_true = min(scale * person["risk_multiplier"], 0.95)
-    died_within_20y = random.random() < p_true
-
-    # Underwriter estimates risk with a little noise (log-normal-ish)
-    noise = random.gauss(1.0, 0.15)  # ~15% std; clamps later
+    # Underwriter estimates risk with multiplicative noise to mimic imperfect
+    # judgement or incomplete information. We clamp to keep within reasonable
+    # bounds and then cap the product to [0, 1].
+    noise = random.gauss(1.0, 0.15)  # ~15% std; clamped below
     noise = max(0.6, min(noise, 1.6))
-    p_est = max(0.0, min(p_true * noise, 0.95))
+    risk_est = max(0.0, min(person["risk_score"] * noise, 1.0))
 
-    decision_pack = decide_underwriter(p_est)
+    decision_pack = decide_underwriter(risk_est)
     decisions_count[decision_pack["decision"]] += 1
-    if died_within_20y:
-        deaths += 1
 
     record = dict(person)
     record.update({
-        "p_true_20y": round(p_true, 4),
-        "underwriter_score": round(p_est, 4),
+        "underwriter_score": round(risk_est, 4),
         "underwriter_decision": decision_pack["decision"],
         "premium_loading": decision_pack["premium_loading"],
-        "died_within_20y": died_within_20y,
     })
 
     dataset.append(record)
@@ -285,9 +296,7 @@ for person in raw_people:
 with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
     json.dump(dataset, f, ensure_ascii=False, indent=2)
 
-avg_mortality = deaths / N
 print(f"Generated {N} synthetic records → {OUTPUT_FILE}")
-print(f"Achieved average 20y mortality: {avg_mortality:.2%} (target {TARGET_20Y_MORTALITY:.2%})")
 print("Decision mix:", decisions_count)
 print("Example record:")
 print(json.dumps(dataset[0], indent=2))
