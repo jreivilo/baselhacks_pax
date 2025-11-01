@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import AnalysisAnimation from './AnalysisAnimation'
 
 const API_BASE = 'http://localhost:8000'
 
@@ -7,6 +8,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
   const [loading, setLoading] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [showPdf, setShowPdf] = useState(true)
   const [isEditingName, setIsEditingName] = useState(false)
   const [tempName, setTempName] = useState('')
@@ -88,6 +90,28 @@ export default function DocumentDetail({ documentId, onUpdate }){
     setIsEditing(false)
   }
 
+  async function handleRunAnalysis(){
+    setIsAnalyzing(true)
+    try{
+      const response = await fetch(`${API_BASE}/documents/${documentId}/analyze`, {
+        method: 'POST'
+      })
+      
+      if(!response.ok) throw new Error('Analysis failed')
+      
+      const result = await response.json()
+      setData(result.data)
+      setFormData(result.data)
+      onUpdate()
+      alert(`Analysis complete! Status: ${result.prediction}`)
+    } catch(error){
+      console.error('Analysis error:', error)
+      alert('Failed to run analysis')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
   if(!documentId){
     return (
       <div className="document-detail">
@@ -146,7 +170,16 @@ export default function DocumentDetail({ documentId, onUpdate }){
             {showPdf ? "Hide PDF" : "Show PDF"}
           </button>
           {!isEditing ? (
-            <button className="btn-edit" onClick={() => setIsEditing(true)}>Edit Data</button>
+            <>
+              <button 
+                className="btn-analyze" 
+                onClick={handleRunAnalysis}
+                disabled={isAnalyzing}
+              >
+                {isAnalyzing ? '⏳ Analyzing...' : '🔍 Run Analysis'}
+              </button>
+              <button className="btn-edit" onClick={() => setIsEditing(true)}>Edit Data</button>
+            </>
           ) : (
             <>
               <button className="btn-save" onClick={handleSave}>Save</button>
@@ -274,6 +307,14 @@ export default function DocumentDetail({ documentId, onUpdate }){
       )}
         </div>
       </div>
+
+      {isAnalyzing && (
+        <div className="modal-overlay">
+          <div className="modal-content extraction-modal">
+            <AnalysisAnimation />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

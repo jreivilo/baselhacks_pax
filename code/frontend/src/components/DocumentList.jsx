@@ -59,27 +59,43 @@ export default function DocumentList({ documents, selectedId, onSelect, loading,
       </div>
       
       <ul className="document-items">
-        {documents.map(doc => (
-          <li 
-            key={doc.id}
-            className={`document-item ${selectedId === doc.id ? 'active' : ''}`}
-            onClick={() => onSelect(doc.id)}
-          >
-            <div className="doc-icon">📄</div>
-            <div className="doc-info">
-              <h3 className="doc-title">{doc.name || doc.filename}</h3>
-              <p className="doc-date">{doc.uploaded_at}</p>
-              <p className="doc-id">ID: {doc.id.slice(0, 8)}...</p>
-            </div>
-            <button 
-              className="btn-delete-small"
-              onClick={(e) => handleDelete(doc.id, e)}
-              title="Delete case"
+        {documents.map(doc => {
+          // Format date - show only month and year
+          const formatDate = (dateStr) => {
+            if (!dateStr || dateStr === 'Unknown') return 'Unknown';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+          };
+
+          return (
+            <li 
+              key={doc.id}
+              className={`document-item ${selectedId === doc.id ? 'active' : ''}`}
+              onClick={() => onSelect(doc.id)}
             >
-              🗑️
-            </button>
-          </li>
-        ))}
+              <div className="doc-icon">📄</div>
+              <div className="doc-info">
+                <h3 className="doc-title">{doc.name || doc.filename}</h3>
+                <p className="doc-date">{formatDate(doc.uploaded_at)}</p>
+                {doc.prediction && (
+                  <span className={`doc-status status-${doc.prediction.toLowerCase()}`}>
+                    STATUS: {doc.prediction}
+                  </span>
+                )}
+                {!doc.prediction && (
+                  <span className="doc-status status-pending">STATUS: Pending</span>
+                )}
+              </div>
+              <button 
+                className="btn-delete-small"
+                onClick={(e) => handleDelete(doc.id, e)}
+                title="Delete case"
+              >
+                🗑️
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </aside>
   )

@@ -43,6 +43,7 @@ class DocumentData(BaseModel):
     annual_income: str
     uploaded_at: str = None
     pdf_path: str = None
+    prediction: str = None  # "Accepted" or "Rejected"
 
 class DocumentNameUpdate(BaseModel):
     name: str
@@ -87,7 +88,8 @@ async def upload_document(file: UploadFile = File(...)) -> Dict[str, Any]:
         "weight_kg": 75,
         "annual_income": "CHF 95,000",
         "uploaded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "pdf_path": f"pdfs/{doc_id}.pdf"
+        "pdf_path": f"pdfs/{doc_id}.pdf",
+        "prediction": None  # No prediction yet
     }
     
     # Save to JSON file
@@ -127,7 +129,8 @@ async def list_documents() -> Dict[str, Any]:
                 "id": data.get("id"),
                 "filename": data.get("filename"),
                 "name": data.get("name", data.get("filename")),  # Use name if available, fallback to filename
-                "uploaded_at": data.get("uploaded_at", "Unknown")
+                "uploaded_at": data.get("uploaded_at", "Unknown"),
+                "prediction": data.get("prediction")  # Include prediction status
             })
     
     # Sort by uploaded_at descending
@@ -206,6 +209,44 @@ async def delete_document(doc_id: str) -> Dict[str, Any]:
         pdf_file.unlink()
     
     return {"status": "success", "message": f"Document {doc_id} deleted"}
+
+@app.post("/documents/{doc_id}/analyze")
+async def run_analysis(doc_id: str) -> Dict[str, Any]:
+    """
+    Run risk analysis on a document and update prediction.
+    Simulates AI analysis with 3 second delay.
+    """
+    data_file = DATA_DIR / f"{doc_id}.json"
+    
+    if not data_file.exists():
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Load existing data
+    with open(data_file) as f:
+        data = json.load(f)
+    
+    # Simulate analysis time
+    await asyncio.sleep(3)
+    
+    # Mock prediction based on simple rules
+    import random
+    
+    # Weighted random: 70% Accepted, 30% Rejected
+    prediction = "Accepted" if random.random() < 0.7 else "Rejected"
+    
+    # Update prediction
+    data["prediction"] = prediction
+    
+    # Save updated data
+    with open(data_file, "w") as f:
+        json.dump(data, f, indent=2)
+    
+    return {
+        "status": "success",
+        "message": "Analysis complete",
+        "prediction": prediction,
+        "data": data
+    }
 
 if __name__ == "__main__":
     import uvicorn
