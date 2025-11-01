@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import ExtractionAnimation from './ExtractionAnimation'
+import Toast from './Toast'
 
 const API_BASE = 'http://localhost:8000'
 
@@ -7,6 +8,7 @@ export default function UploadModal({ onClose, onSuccess }){
   const [file, setFile] = useState(null)
   const [dragActive, setDragActive] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [toast, setToast] = useState(null)
 
   function handleDragOver(e){
     e.preventDefault()
@@ -26,7 +28,7 @@ export default function UploadModal({ onClose, onSuccess }){
     if(droppedFile && (droppedFile.type === 'application/pdf' || droppedFile.name.toLowerCase().endsWith('.pdf'))){
       setFile(droppedFile)
     } else {
-      alert('Please upload a PDF file')
+      setToast({ message: 'Please upload a PDF file', type: 'error' })
     }
   }
 
@@ -56,9 +58,8 @@ export default function UploadModal({ onClose, onSuccess }){
       onSuccess()
     } catch(error){
       console.error('Upload error:', error)
-      alert('Failed to upload case. Make sure the backend is running.')
-    } finally {
       setUploading(false)
+      setToast({ message: 'Failed to upload case. Make sure the backend is running.', type: 'error' })
     }
   }
 
@@ -123,6 +124,14 @@ export default function UploadModal({ onClose, onSuccess }){
             {uploading ? 'Uploading...' : 'Upload'}
           </button>
         </div>
+
+        {toast && (
+          <Toast 
+            message={toast.message} 
+            type={toast.type} 
+            onClose={() => setToast(null)}
+          />
+        )}
       </div>
     </div>
   )

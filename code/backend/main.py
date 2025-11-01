@@ -3,7 +3,7 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,10 +43,14 @@ class DocumentData(BaseModel):
     annual_income: str
     uploaded_at: str = None
     pdf_path: str = None
-    prediction: str = None  # "Accepted" or "Rejected"
+    model_prediction: str = None  # "Accepted" or "Rejected" - AI model prediction
+    human_prediction: str = None  # "Accepted" or "Rejected" - Human override
 
 class DocumentNameUpdate(BaseModel):
     name: str
+
+class HumanPredictionUpdate(BaseModel):
+    human_prediction: Optional[str] = None  # "Accepted", "Rejected", or None to clear
 
 @app.get("/")
 def read_root():
@@ -89,7 +93,8 @@ async def upload_document(file: UploadFile = File(...)) -> Dict[str, Any]:
         "annual_income": "CHF 95,000",
         "uploaded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "pdf_path": f"pdfs/{doc_id}.pdf",
-        "prediction": None  # No prediction yet
+        "model_prediction": None,  # No AI prediction yet
+        "human_prediction": None   # No human override yet
     }
     
     # Save to JSON file
@@ -100,20 +105,24 @@ async def upload_document(file: UploadFile = File(...)) -> Dict[str, Any]:
     return extracted_data
 
 @app.put("/save/{doc_id}")
-async def save_document(doc_id: str, data: DocumentData) -> Dict[str, Any]:
+async def save_document(doc_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Save/update document data by ID.
+    Accept raw dictionary to avoid Pydantic validation issues.
     """
-    if data.id != doc_id:
+    if data.get("id") != doc_id:
         raise HTTPException(status_code=400, detail="Document ID mismatch")
     
     data_file = DATA_DIR / f"{doc_id}.json"
     
+    if not data_file.exists():
+        raise HTTPException(status_code=404, detail="Document not found")
+    
     # Save updated data
     with open(data_file, "w") as f:
-        json.dump(data.dict(), f, indent=2)
+        json.dump(data, f, indent=2)
     
-    return {"status": "success", "message": f"Document {doc_id} saved", "data": data.dict()}
+    return {"status": "success", "message": f"Document {doc_id} saved", "data": data}
 
 @app.get("/documents")
 async def list_documents() -> Dict[str, Any]:
@@ -130,7 +139,10 @@ async def list_documents() -> Dict[str, Any]:
                 "filename": data.get("filename"),
                 "name": data.get("name", data.get("filename")),  # Use name if available, fallback to filename
                 "uploaded_at": data.get("uploaded_at", "Unknown"),
-                "prediction": data.get("prediction")  # Include prediction status
+                "model_prediction": data.get("model_prediction"),  # AI prediction
+                "human_prediction": data.get("human_prediction"),  # Human override
+                # For backward compatibility, also send 'prediction' as human_prediction if exists, else model_prediction
+                "prediction": data.get("human_prediction") or data.get("model_prediction")
             })
     
     # Sort by uploaded_at descending
@@ -226,16 +238,16 @@ async def run_analysis(doc_id: str) -> Dict[str, Any]:
         data = json.load(f)
     
     # Simulate analysis time
-    await asyncio.sleep(3)
+    await asyncio.sleep(5)
     
     # Mock prediction based on simple rules
     import random
+
+    # Weighted random: 50% Accepted, 50% Rejected
+    model_prediction = "Accepted" if random.random() < 0.5 else "Rejected"
     
-    # Weighted random: 70% Accepted, 30% Rejected
-    prediction = "Accepted" if random.random() < 0.7 else "Rejected"
-    
-    # Update prediction
-    data["prediction"] = prediction
+    # Update model prediction (don't touch human_prediction)
+    data["model_prediction"] = model_prediction
     
     # Save updated data
     with open(data_file, "w") as f:
@@ -244,7 +256,43 @@ async def run_analysis(doc_id: str) -> Dict[str, Any]:
     return {
         "status": "success",
         "message": "Analysis complete",
-        "prediction": prediction,
+        "model_prediction": model_prediction,
+        "data": data
+    }
+
+@app.patch("/documents/{doc_id}/human-prediction")
+async def update_human_prediction(doc_id: str, update: HumanPredictionUpdate) -> Dict[str, Any]:
+    """
+    Update the human prediction/override for a document.
+    Allows humans to accept or reject regardless of AI prediction.
+    Set to null to clear the human override.
+    """
+    data_file = DATA_DIR / f"{doc_id}.json"
+    
+    if not data_file.exists():
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Validate prediction value (allow null to clear)
+    if update.human_prediction is not None and update.human_prediction not in ["Accepted", "Rejected"]:
+        raise HTTPException(status_code=400, detail="human_prediction must be 'Accepted', 'Rejected', or null")
+    
+    # Load existing data
+    with open(data_file) as f:
+        data = json.load(f)
+    
+    # Update human prediction
+    data["human_prediction"] = update.human_prediction
+    
+    # Save updated data
+    with open(data_file, "w") as f:
+        json.dump(data, f, indent=2)
+    
+    message = f"Human prediction updated to {update.human_prediction}" if update.human_prediction else "Human override cleared"
+    
+    return {
+        "status": "success",
+        "message": message,
+        "human_prediction": update.human_prediction,
         "data": data
     }
 
