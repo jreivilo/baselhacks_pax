@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import DocumentPreview from './DocumentPreview'
 import DataRow from './DataRow'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = '/api'
 
 export default function FileUpload(){
   const [uploadedFiles, setUploadedFiles] = useState([])

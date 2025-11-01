@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 
+const API_BASE = '/api'
 export default function CaseDecision({ onBack }) {
   const model_decision = "reject";
   const applicantData = {
