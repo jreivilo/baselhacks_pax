@@ -3,8 +3,7 @@ import AnalysisAnimation from './AnalysisAnimation'
 import Toast from './Toast'
 import CaseDecision from './CaseDecision'
 
-const API_BASE = '/api'
-
+const API_BASE = 'http://127.0.0.1:8000'
 export default function DocumentDetail({ documentId, onUpdate }){
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -37,12 +36,44 @@ export default function DocumentDetail({ documentId, onUpdate }){
       }
     }
   }, [documentId])
-  
+
   useEffect(() => {
   if (formData) {
     localStorage.setItem("formSessionData", JSON.stringify(formData))
   }
   }, [formData])
+
+    useEffect(() => {
+    if (documentId) {
+      loadDocument().then(() => {
+        generateDependencyPlots();
+      });
+    } else {
+      setData(null);
+    }
+  }, [documentId]);
+
+  async function generateDependencyPlots() {
+    try {
+      const response = await fetch(`/api/dependency_plots`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      if (!response.ok) throw new Error("Failed to generate plots");
+
+      const result = await response.json();
+      console.log("Dependency plots generated:", result.dependency_plots);
+
+      // Optionally store these paths in state
+      setFormData((prev) => ({
+        ...prev,
+        dependency_plot_paths: result.dependency_plots,
+      }));
+    } catch (error) {
+      console.error("Dependency plot generation error:", error);
+    }
+  }
 
   async function loadDocument(){
     setLoading(true)
@@ -80,10 +111,11 @@ export default function DocumentDetail({ documentId, onUpdate }){
       
       if(!response.ok) throw new Error('Name update failed')
       
-      setData(prev => ({ ...prev, name: tempName }))
-      setFormData(prev => ({ ...prev, name: tempName }))
+      setData(prev => ({ ...prev, name: tempName  , dependency_plot_paths: result.dependency_plots}))
+      setFormData(prev => ({ ...prev, name: tempName  , dependency_plot_paths: result.dependency_plots
+}))
       setIsEditingName(false)
-      onUpdate()
+      onUpdate()  
       setToast({ message: 'Case name updated successfully', type: 'success' })
     } catch(error){
       console.error('Name update error:', error)

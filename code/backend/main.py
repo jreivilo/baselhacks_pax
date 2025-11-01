@@ -15,11 +15,20 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from typing import List
 import io
+from fastapi.staticfiles import StaticFiles
+
+# import dependency_plots module safely and attach its router if available
+dep_router = None
 try:
-    from PIL import Image
-    HAS_PIL = True
-except ImportError:
-    HAS_PIL = False
+    import api.dependency_plots as dependency_plots_mod
+    # prefer an exported 'router' object
+    dep_router = getattr(dependency_plots_mod, "router", None)
+    # some implementations may export a sub-object named dependency_plots with a router
+    if dep_router is None and hasattr(dependency_plots_mod, "dependency_plots"):
+        dep_router = getattr(dependency_plots_mod.dependency_plots, "router", None)
+except Exception as e:
+    dep_router = None
+    print("Warning: failed to import api.dependency_plots:", e)
 
 # Load environment variables
 load_dotenv()
@@ -32,6 +41,17 @@ if OPENAI_API_KEY:
     client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI(title="PAX Document Processing API")
+
+# serve generated dependency plots from backend/static/dependency_plots
+static_dir = Path(__file__).resolve().parents[0] / "static" / "dependency_plots"
+static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/dependency_plots", StaticFiles(directory=str(static_dir)), name="dependency_plots")
+
+# include router if available
+if dep_router:
+    app.include_router(dep_router)
+else:
+    print("api.dependency_plots router not available; skipping include_router")
 
 # Enable CORS for frontend
 app.add_middleware(

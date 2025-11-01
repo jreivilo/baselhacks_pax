@@ -1,8 +1,11 @@
 import React, { useState } from "react";
 
-const API_BASE = '/api'
+const API_BASE = 'http://127.0.0.1:8000'
+
 export default function CaseDecision({ onBack , data}) {
   const model_decision = "reject";
+  const plotPaths = data.dependency_plot_paths || {};
+
  const applicantData = {
     general: {
       name: data?.name || "Applicant",
@@ -10,45 +13,47 @@ export default function CaseDecision({ onBack , data}) {
       address: "—"
     },
     categories: {
-      "Gender": [
+      "1. Gender": [
         { question: "What is your gender?", answer: data.gender },
         { question: "Do you identify with your registered gender?", answer: "Yes" }
       ],
-      "Age": [
+      "2. Age": [
         { question: "What is your current age?", answer: data.age },
-        { question: "Has your age been verified through official ID?", answer: "Yes" }
+        { question: "Has your age been verified through official ID?", answer: "Yes" },
+        { dependency_plot_path: plotPaths.age }
+
       ],
-      "Marital Status": [
+      "3. Marital Status": [
         { question: "What is your marital status?", answer: data.marital_status }
       ],
-      "BMI": [
+      "4.  BMI": [
         { question: "What is your BMI?", answer: data.bmi },
         { question: "Height (cm)", answer: data.height_cm },
         { question: "Weight (kg)", answer: data.weight_kg }
       ],
-      "Smoking": [
+      "5. Smoking": [
         { question: "Do you smoke?", answer: data.smoking ? "Yes" : "No" },
         { question: "Packs per week", answer: data.packs_per_week }
       ],
-      "Drug Use": [
+      "6. Drug Use": [
         { question: "Do you use recreational drugs?", answer: data.drug_use ? "Yes" : "No" },
         { question: "Frequency (per week)", answer: data.drug_frequency },
         { question: "Type", answer: data.drug_type }
       ],
-      "Medical": [
+      "7. Medical": [
         { question: "Do you have any medical issues?", answer: data.medical_issue ? "Yes" : "No" },
         { question: "Condition severity", answer: data.medical_type }
       ],
-      "Doctor Visits": [
+      "8. Doctor Visits": [
         { question: "Do you visit a doctor regularly?", answer: data.doctor_visits ? "Yes" : "No" },
         { question: "Type of doctor", answer: data.visit_type }
       ],
-      "Sports": [
+      "9. Sports": [
         { question: "Do you play dangerous sports?", answer: data.dangerous_sports ? "Yes" : "No" },
         { question: "Sport type", answer: data.sport_type },
         { question: "Activity hours per week", answer: data.sports_activity_h_per_week }
       ],
-      "Financial": [
+      "10. Financial": [
         { question: "Annual earning (CHF)", answer: data.earning_chf }
       ]
     },
@@ -66,6 +71,7 @@ export default function CaseDecision({ onBack , data}) {
 
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [decision, setDecision] = useState("");
+  
 
   const toggleExpand = (cat) =>
     setExpandedCategory(expandedCategory === cat ? null : cat);
@@ -276,16 +282,17 @@ const getImpactColor = (value) => {
                       alignSelf: "flex-start",
                     }}
                     >
-                    <img
-                      src={depPath}
-                      alt={`${category} dependency plot`}
-                      style={{
-                      width: "100%",
-                      height: "auto",
-                      borderRadius: "4px",
-                      boxSizing: "border-box",
-                      }}
-                    />
+                      <img
+                        src={`${API_BASE}${depPath}`}
+                        alt={`${category} dependency plot`}
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          borderRadius: "4px",
+                          boxSizing: "border-box"
+                        }}
+                      />
+                    <br />
                     </div>
                   )}
                   </div>
