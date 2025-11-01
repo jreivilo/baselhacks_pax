@@ -28,7 +28,8 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Initialize OpenAI client
-client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+if OPENAI_API_KEY:
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI(title="PAX Document Processing API")
 
