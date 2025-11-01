@@ -24,6 +24,26 @@ export default function DocumentDetail({ documentId, onUpdate }){
     }
   }, [documentId])
 
+  useEffect(() => {
+    if (!documentId) {
+      const saved = localStorage.getItem("formSessionData")
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          setFormData(parsed)
+        } catch (err) {
+          console.error("Failed to parse saved form data:", err)
+        }
+      }
+    }
+  }, [documentId])
+  
+  useEffect(() => {
+  if (formData) {
+    localStorage.setItem("formSessionData", JSON.stringify(formData))
+  }
+  }, [formData])
+
   async function loadDocument(){
     setLoading(true)
     try{
@@ -720,7 +740,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
         {showAnalysis && (
           <CaseDecision 
             documentId={documentId}
-            data={data}
+            data={formData}    
             onUpdate={handleDataUpdate}
             onToast={setToast}
             onRunAnalysis={handleRunAnalysis}
