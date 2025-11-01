@@ -8,6 +8,7 @@ Requires-Dist: dotenv>=0.9.9
 Requires-Dist: fastapi>=0.120.4
 Requires-Dist: httpx>=0.28.1
 Requires-Dist: joblib>=1.5.2
+Requires-Dist: matplotlib>=3.9.0
 Requires-Dist: numpy>=2.3.4
 Requires-Dist: openai>=2.6.1
 Requires-Dist: pandas>=2.3.3

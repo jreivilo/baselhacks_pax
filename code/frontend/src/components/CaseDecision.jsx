@@ -124,6 +124,7 @@ async function handleRunCalculationInner({ applicantData, setLoading, setError, 
   }
 }
 export default function CaseDecision({ data, onBack }) {
+  const plotPaths = data.dependency_plot_paths || {};
   const model_decision = "reject";
  const applicantData = {
     general: {
@@ -388,10 +389,19 @@ const getImpactColor = (value) => {
                 }}
               >
                 {(() => {
-                const depItem = qaList.find((q) => q.dependency_plot_path);
-                const depPath = depItem?.dependency_plot_path;
-                // show only QA items that are not the dependency placeholder
-                const qaItems = qaList.filter((q) => !q.dependency_plot_path);
+                // Map category names to plot path keys
+                const plotKeyMap = {
+                  "Age": "age",
+                  "BMI": "bmi",
+                  "Smoking": "smoking",
+                  "Drug Use": "drug_frequency",
+                  "Sports": "sport_hours"
+                };
+                const plotKey = plotKeyMap[category];
+                const depPath = plotPaths?.[plotKey];
+
+                // show all QA items
+                const qaItems = qaList.filter((q) => !q.dependency);
 
                 return (
                   <div
@@ -407,7 +417,7 @@ const getImpactColor = (value) => {
                     <p key={index} style={{ marginBottom: "0.75rem" }}>
                       <strong>{item.question}</strong>
                       <br />
-                      Answer: {String(item.answer)}
+                      Answer: {String(item.answer ?? '—')}
                     </p>
                     ))}
                   </div>
@@ -422,15 +432,15 @@ const getImpactColor = (value) => {
                     }}
                     >
                     <img
-                      src={depPath}
-                      alt={`${category} dependency plot`}
-                      style={{
-                      width: "100%",
-                      height: "auto",
-                      borderRadius: "4px",
-                      boxSizing: "border-box",
-                      }}
-                    />
+                        src={depPath.startsWith('/api') ? depPath : `${API_BASE}${depPath}`}
+                        alt={`${category} dependency plot`}
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          borderRadius: "4px",
+                          boxSizing: "border-box"
+                        }}
+                      />
                     </div>
                   )}
                   </div>

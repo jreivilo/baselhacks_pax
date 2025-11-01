@@ -63,6 +63,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if OPENAI_API_KEY:
     client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
+# Import dependency plots router (before app creation to avoid circular imports)
+from api.dependency_plots import router as dependency_plots_router
+
 app = FastAPI(title="PAX Document Processing API")
 
 # Enable CORS for frontend
@@ -73,6 +76,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for dependency plots
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+static_dir = STATIC_DIR / "dependency_plots"
+static_dir.mkdir(parents=True, exist_ok=True)
+
+# Include dependency plots router FIRST (before GET route to avoid conflicts)
+# Note: Vite proxy strips /api prefix, so router should not have /api prefix
+app.include_router(dependency_plots_router, tags=["dependency-plots"])
+
+# Serve static files for dependency plots via a dedicated endpoint
+# This comes AFTER the router so POST requests are handled first
+# Note: Vite proxy strips /api, so this endpoint should not have /api prefix
+@app.get("/dependency_plots/{filename}")
+async def get_dependency_plot(filename: str):
+    """Serve dependency plot images."""
+    plot_file = static_dir / filename
+    if not plot_file.exists():
+        raise HTTPException(status_code=404, detail="Plot not found")
+    return FileResponse(
+        plot_file,
+        media_type="image/png",
+        headers={"Content-Disposition": "inline"}
+    )
 
 # Data storage directory
 DATA_DIR = Path(__file__).parent / "data"

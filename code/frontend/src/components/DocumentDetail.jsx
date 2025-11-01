@@ -113,6 +113,17 @@ export default function DocumentDetail({ documentId, onUpdate }){
     }
   }, [documentId])
 
+  // Regenerate plots when relevant fields change or document is loaded (debounced to avoid too many requests)
+  useEffect(() => {
+    if (!documentId || !formData || !formData.id) return;
+    
+    const timeoutId = setTimeout(() => {
+      generateDependencyPlots();
+    }, 500); // Debounce for 500ms
+    
+    return () => clearTimeout(timeoutId);
+  }, [documentId, formData?.age, formData?.bmi, formData?.smoking, formData?.drug_frequency, formData?.sports_activity_h_per_week])
+
   useEffect(() => {
     if (!documentId) {
       const saved = localStorage.getItem("formSessionData")
@@ -163,10 +174,36 @@ export default function DocumentDetail({ documentId, onUpdate }){
       // Validate fields on load
       const invalid = getInvalidFields(dataWithDefaults)
       setInvalidFields(invalid)
+      
+      // Generate dependency plots after data is loaded
+      // (will be triggered by the useEffect hook below)
     } catch(error){
       console.error('Failed to load document:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function generateDependencyPlots() {
+    if (!formData || !documentId) return;
+    
+    try {
+      const response = await fetch(`${API_BASE}/dependency_plots`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      
+      if (!response.ok) throw new Error("Failed to generate plots");
+
+      const result = await response.json();
+      console.log("Dependency plots generated:", result.dependency_plots);
+
+      // Store these paths in both data and formData
+      setData(prev => ({ ...prev, dependency_plot_paths: result.dependency_plots }));
+      setFormData(prev => ({ ...prev, dependency_plot_paths: result.dependency_plots }));
+    } catch (error) {
+      console.error("Dependency plot generation error:", error);
     }
   }
 
