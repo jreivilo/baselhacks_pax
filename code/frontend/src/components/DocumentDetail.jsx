@@ -427,10 +427,6 @@ export default function DocumentDetail({ documentId, onUpdate }){
           />
         </div>
 
-        <div className={`detail-field ${invalidFields.has('sex') ? 'field-invalid' : ''}`}>
-          <label>Sex</label>
-          <select 
-            value={formData.sex || ''} 
         {/* Basic Information */}
         <div className="detail-field">
           <label>Gender</label>
@@ -520,14 +516,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
             }}
             onFocus={() => handleFieldFocus('occupation')}
             className={invalidFields.has('occupation') ? 'input-invalid' : ''}
-            className={isFieldMissing('marital_status') ? 'field-missing' : ''}
-          >
-            <option value="">-- Select --</option>
-            <option value="single">Single</option>
-            <option value="married">Married</option>
-            <option value="divorced">Divorced</option>
-            <option value="widowed">Widowed</option>
-          </select>
+          />
         </div>
 
         {/* Physical Attributes */}
@@ -665,6 +654,9 @@ export default function DocumentDetail({ documentId, onUpdate }){
             }}
             onFocus={() => handleFieldFocus('annual_income')}
             className={invalidFields.has('annual_income') ? 'input-invalid' : ''}
+          />
+        </div>
+
         <div className="detail-field">
           <label>Packs per Week</label>
           <input 
