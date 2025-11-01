@@ -5,7 +5,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from openai import AsyncOpenAI
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -13,8 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from typing import List
 import io
+import numpy as np
+import pandas as pd
+import joblib
+import xgboost as xgb
+import shap
 try:
     from PIL import Image
     HAS_PIL = True
@@ -47,6 +51,76 @@ DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 PDF_DIR = DATA_DIR / "pdfs"
 PDF_DIR.mkdir(exist_ok=True)
+MODEL_DIR = DATA_DIR / "model"
+
+# Globals for model artifacts (loaded once)
+PREPROCESSOR = None
+LABEL_ENCODER = None
+BOOSTER: Optional[xgb.Booster] = None
+FEATURE_META: Dict[str, Any] = {}
+SHAP_BG: Optional[np.ndarray] = None
+MANIFEST: Dict[str, Any] = {}
+EXPLAINER: Optional[shap.Explainer] = None
+
+
+def _safe_load_json(p: Path) -> Dict[str, Any]:
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def load_model_artifacts() -> None:
+    """Load model, preprocessor and SHAP background once at startup."""
+    global PREPROCESSOR, LABEL_ENCODER, BOOSTER, FEATURE_META, SHAP_BG, MANIFEST, EXPLAINER
+
+    if not MODEL_DIR.exists():
+        print("Model directory not found:", MODEL_DIR)
+        return
+
+    pre_path = MODEL_DIR / "preprocessor.joblib"
+    le_path = MODEL_DIR / "label_encoder.joblib"
+    model_json_path = MODEL_DIR / "xgboost_model.json"
+    feat_meta_path = MODEL_DIR / "feature_names.json"
+    shap_bg_path = MODEL_DIR / "shap_background.npy"
+    manifest_path = MODEL_DIR / "manifest.json"
+
+    if pre_path.exists():
+        PREPROCESSOR = joblib.load(pre_path)
+        print("Loaded preprocessor")
+    if le_path.exists():
+        LABEL_ENCODER = joblib.load(le_path)
+        print("Loaded label encoder")
+    if model_json_path.exists():
+        BOOSTER = xgb.Booster()
+        BOOSTER.load_model(str(model_json_path))
+        print("Loaded XGBoost booster")
+    if feat_meta_path.exists():
+        FEATURE_META = _safe_load_json(feat_meta_path)
+        print("Loaded feature metadata")
+    if shap_bg_path.exists():
+        try:
+            SHAP_BG = np.load(shap_bg_path)
+            print("Loaded SHAP background", SHAP_BG.shape)
+        except Exception as e:
+            print("Failed to load SHAP background:", e)
+    if manifest_path.exists():
+        MANIFEST = _safe_load_json(manifest_path)
+        print("Loaded manifest")
+
+    # Build SHAP explainer lazily if all pieces exist
+    if BOOSTER is not None and SHAP_BG is not None:
+        try:
+            # Use function-based explainer for stable multi-class probabilities
+            def predict_proba_fn(X: np.ndarray) -> np.ndarray:
+                dm = xgb.DMatrix(X)
+                return BOOSTER.predict(dm)
+
+            EXPLAINER = shap.Explainer(predict_proba_fn, SHAP_BG)
+            print("Initialized SHAP explainer")
+        except Exception as e:
+            print("Failed to initialize SHAP explainer:", e)
 
 async def process_pdf_with_workflow(pdf_content: bytes) -> Dict[str, Any]:
     """
@@ -142,6 +216,43 @@ class DocumentData(BaseModel):
     model_prediction: Optional[str] = None  # "Accepted" or "Rejected" - AI model prediction
     human_prediction: Optional[str] = None  # "Accepted" or "Rejected" - Human override
 
+
+class PredictRequest(BaseModel):
+    # Mirror the fields used by the model (all optional; missing -> np.nan/None)
+    gender: Optional[str] = None
+    age: Optional[int] = None
+    birthdate: Optional[str] = None
+    marital_status: Optional[str] = None
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    bmi: Optional[float] = None
+    smoking: Optional[bool] = None
+    packs_per_week: Optional[float] = None
+    drug_use: Optional[bool] = None
+    drug_frequency: Optional[float] = None
+    drug_type: Optional[str] = None
+    staying_abroad: Optional[bool] = None
+    abroad_type: Optional[str] = None
+    dangerous_sports: Optional[bool] = None
+    sport_type: Optional[str] = None
+    medical_issue: Optional[bool] = None
+    medical_type: Optional[str] = None
+    doctor_visits: Optional[bool] = None
+    visit_type: Optional[str] = None
+    regular_medication: Optional[bool] = None
+    medication_type: Optional[str] = None
+    sports_activity_h_per_week: Optional[float] = None
+    earning_chf: Optional[int] = None
+    include_explanation: bool = True
+
+
+class PredictResponse(BaseModel):
+    decision: str
+    probabilities: Dict[str, float]
+    score: float
+    model_version: Optional[str] = None
+    explanation: Optional[Dict[str, Any]] = None
+
 class DocumentNameUpdate(BaseModel):
     name: str
 
@@ -151,6 +262,17 @@ class HumanPredictionUpdate(BaseModel):
 @app.get("/")
 def read_root():
     return {"message": "PAX Document Processing API", "status": "running"}
+
+
+@app.get("/health")
+def health() -> Dict[str, Any]:
+    ok = all([
+        PREPROCESSOR is not None,
+        LABEL_ENCODER is not None,
+        BOOSTER is not None,
+        isinstance(FEATURE_META, dict) and FEATURE_META.get("all_feature_names_after_pre"),
+    ])
+    return {"status": "ok" if ok else "degraded", "model_loaded": ok}
 
 async def convert_images_to_pdf(image_files: List[bytes]) -> bytes:
     """
@@ -480,3 +602,143 @@ async def update_human_prediction(doc_id: str, update: HumanPredictionUpdate) ->
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# Load model artifacts at import-time (when server starts)
+try:
+    load_model_artifacts()
+except Exception as _e:
+    print("Model artifacts load failed:", _e)
+
+
+def _build_input_dataframe(payload: Dict[str, Any]) -> pd.DataFrame:
+    """Construct a single-row DataFrame with the columns expected by the preprocessor."""
+    if not FEATURE_META:
+        raise HTTPException(status_code=500, detail="Feature metadata not loaded")
+    categorical_cols: List[str] = FEATURE_META.get("categorical_cols", [])
+    numeric_cols: List[str] = FEATURE_META.get("numeric_cols", [])
+
+    row: Dict[str, Any] = {}
+    # Fill categorical with provided values (strings/bools), else None
+    for col in categorical_cols:
+        row[col] = payload.get(col, None)
+    # Fill numeric with provided values, else np.nan
+    for col in numeric_cols:
+        val = payload.get(col, None)
+        row[col] = np.nan if val is None else val
+
+    return pd.DataFrame([row], columns=categorical_cols + numeric_cols)
+
+
+def _group_shap_contributions(contrib: np.ndarray) -> Dict[str, Any]:
+    """Group per-feature contributions into original categories for green/red bars."""
+    feat_names: List[str] = FEATURE_META.get("all_feature_names_after_pre", [])
+    categorical_cols: List[str] = FEATURE_META.get("categorical_cols", [])
+    numeric_cols: List[str] = FEATURE_META.get("numeric_cols", [])
+
+    # Build mapping from feature name -> category
+    def feat_to_category(fname: str) -> str:
+        if fname in numeric_cols:
+            return fname
+        # find categorical col prefix like "gender_..."
+        for col in sorted(categorical_cols, key=len, reverse=True):
+            prefix = f"{col}_"
+            if fname.startswith(prefix):
+                return col
+        # fallback: if no underscore match, return first token or original
+        return fname.split("_", 1)[0]
+
+    grouped: Dict[str, float] = {}
+    details: List[Dict[str, Any]] = []
+    for idx, fname in enumerate(feat_names):
+        val = float(contrib[idx]) if idx < len(contrib) else 0.0
+        cat = feat_to_category(fname)
+        grouped[cat] = grouped.get(cat, 0.0) + val
+        details.append({"feature": fname, "impact": val})
+
+    grouped_list = [
+        {"category": k, "impact": v} for k, v in sorted(grouped.items(), key=lambda kv: abs(kv[1]), reverse=True)
+    ]
+
+    # Top features (not grouped) for UI lists/waterfall
+    top_features = sorted(details, key=lambda d: abs(d["impact"]), reverse=True)[:20]
+    return {"grouped_impacts": grouped_list, "top_features": top_features}
+
+
+@app.post("/predict", response_model=PredictResponse)
+def predict(req: PredictRequest) -> PredictResponse:
+    # Lazy-load once if not yet loaded (e.g., server started before artifacts were written)
+    global PREPROCESSOR, LABEL_ENCODER, BOOSTER, FEATURE_META
+    if PREPROCESSOR is None or LABEL_ENCODER is None or BOOSTER is None or not FEATURE_META:
+        load_model_artifacts()
+    if PREPROCESSOR is None or LABEL_ENCODER is None or BOOSTER is None or not FEATURE_META:
+        raise HTTPException(status_code=503, detail="Model not available")
+
+    # Build input DataFrame and transform
+    df = _build_input_dataframe(req.model_dump())
+    try:
+        X_t = PREPROCESSOR.transform(df)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Preprocessing failed: {e}")
+
+    # Predict probabilities
+    dm = xgb.DMatrix(X_t)
+    probs = BOOSTER.predict(dm)
+    if probs.ndim == 1:
+        probs = probs.reshape(1, -1)
+
+    # Map to class names
+    class_names: List[str] = FEATURE_META.get("class_names") or list(getattr(LABEL_ENCODER, "classes_", []))
+    if not class_names:
+        raise HTTPException(status_code=500, detail="Class names not available")
+
+    prob_map = {class_names[i]: float(probs[0, i]) for i in range(len(class_names))}
+    pred_idx = int(np.argmax(probs[0]))
+    decision = class_names[pred_idx]
+    score = float(probs[0, pred_idx])
+
+    explanation = None
+    if req.include_explanation and EXPLAINER is not None:
+        try:
+            shap_values = EXPLAINER(X_t)
+            # Handle various SHAP output shapes
+            values = getattr(shap_values, "values", shap_values)
+            # base values
+            base_vals = getattr(shap_values, "base_values", None)
+            if isinstance(base_vals, np.ndarray):
+                if base_vals.ndim == 2 and base_vals.shape[0] >= 1:
+                    base_value = float(base_vals[0, pred_idx if base_vals.shape[1] > pred_idx else 0])
+                elif base_vals.ndim == 1 and base_vals.shape[0] >= 1:
+                    base_value = float(base_vals[0])
+                else:
+                    base_value = 0.0
+            else:
+                base_value = 0.0
+
+            if isinstance(values, np.ndarray):
+                if values.ndim == 3:
+                    contrib = values[0, :, pred_idx]
+                elif values.ndim == 2:
+                    contrib = values[0]
+                else:
+                    contrib = np.array(values).reshape(-1)
+            else:
+                contrib = np.array(values).reshape(-1)
+
+            groups = _group_shap_contributions(contrib)
+            explanation = {
+                "target_class": decision,
+                "base_value": base_value,
+                **groups,
+            }
+        except Exception as e:
+            # Provide graceful degradation if SHAP fails
+            explanation = {"error": f"SHAP explanation failed: {e}"}
+
+    return PredictResponse(
+        decision=decision,
+        probabilities=prob_map,
+        score=score,
+        model_version=MANIFEST.get("created_at"),
+        explanation=explanation,
+    )

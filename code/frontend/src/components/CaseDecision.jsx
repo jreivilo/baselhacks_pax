@@ -1,6 +1,127 @@
 import React, { useState } from "react";
 
 const API_BASE = '/api'
+
+// -------- Helper functions for payload and API --------
+function getCategoryAnswer(applicantData, category, predicate) {
+  const list = applicantData?.categories?.[category];
+  if (!Array.isArray(list)) return undefined;
+  if (!predicate) {
+    const a = list.find((x) => typeof x?.answer !== "undefined");
+    return a?.answer;
+  }
+  const hit = list.find(predicate);
+  return hit?.answer;
+}
+
+function parseYesNo(val) {
+  if (typeof val === 'boolean') return val;
+  if (!val) return undefined;
+  const s = String(val).toLowerCase();
+  if (["yes", "y", "true"].includes(s)) return true;
+  if (["no", "n", "false"].includes(s)) return false;
+  return undefined;
+}
+
+function parseNumber(val) {
+  if (typeof val === 'number') return val;
+  if (val == null) return undefined;
+  const n = Number(String(val).replace(/[^0-9.+-]/g, ''));
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function findRiskKeyword(listLike) {
+  if (!listLike) return undefined;
+  const s = String(listLike).toLowerCase();
+  if (s.includes('danger')) return 'danger';
+  if (s.includes('warning')) return 'warning';
+  if (s.includes('safe')) return 'safe';
+  return undefined;
+}
+
+function normalizeGender(val) {
+  if (!val) return undefined;
+  const s = String(val).toLowerCase();
+  if (s.startsWith('m')) return 'm';
+  if (s.startsWith('f')) return 'f';
+  if (s.startsWith('o')) return 'other';
+  return undefined;
+}
+
+async function callPredictAPI(payload) {
+  const res = await fetch(`${API_BASE}/predict`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+function buildPayload(applicantData) {
+  // Extract values from our demo structure with best-effort normalization
+  const gender = normalizeGender(getCategoryAnswer(applicantData, 'Gender'));
+  const age = parseNumber(getCategoryAnswer(applicantData, 'Age'));
+  const marital_status = String(getCategoryAnswer(applicantData, 'Marital Status') || '').toLowerCase() || undefined;
+  const height_cm = parseNumber(getCategoryAnswer(applicantData, 'Height (cm)'));
+  const weight_kg = parseNumber(getCategoryAnswer(applicantData, 'Weight (kg)'));
+  const bmi = parseNumber(getCategoryAnswer(applicantData, 'BMI'));
+  const smoking = parseYesNo(getCategoryAnswer(applicantData, 'Smoking'));
+  const packs_per_week = parseNumber(getCategoryAnswer(applicantData, 'Packs per Week'));
+  const drug_use = parseYesNo(getCategoryAnswer(applicantData, 'Drug Use'));
+  const drug_frequency = parseNumber(getCategoryAnswer(applicantData, 'Drug Frequency'));
+  const drug_type = findRiskKeyword(getCategoryAnswer(applicantData, 'Drug Type')) || 'safe';
+  const staying_abroad = parseYesNo(getCategoryAnswer(applicantData, 'Staying Abroad'));
+  const abroad_type = findRiskKeyword(getCategoryAnswer(applicantData, 'Abroad Type')) || 'safe';
+  const dangerous_sports = parseYesNo(getCategoryAnswer(applicantData, 'Dangerous Sports'));
+  const sport_type = findRiskKeyword(getCategoryAnswer(applicantData, 'Sport Type')) || 'safe';
+  const medical_issue = parseYesNo(getCategoryAnswer(applicantData, 'Medical Issue'));
+  const medical_type = findRiskKeyword(getCategoryAnswer(applicantData, 'Medical Type')) || 'safe';
+  const doctor_visits = parseYesNo(getCategoryAnswer(applicantData, 'Doctor Visits'));
+  const visit_type = String(getCategoryAnswer(applicantData, 'Visit Type') || '').toLowerCase() || undefined;
+  const regular_medication = parseYesNo(getCategoryAnswer(applicantData, 'Regular Medication'));
+  const medication_type = findRiskKeyword(getCategoryAnswer(applicantData, 'Medication Type')) || 'safe';
+  const sports_activity_h_per_week = parseNumber(getCategoryAnswer(applicantData, 'Sports Activity (hours/week)'));
+  const earning_chf = parseNumber(getCategoryAnswer(applicantData, 'Earning (CHF)'));
+
+  return {
+    gender, age, marital_status,
+    height_cm, weight_kg, bmi,
+    smoking, packs_per_week,
+    drug_use, drug_frequency, drug_type,
+    staying_abroad, abroad_type,
+    dangerous_sports, sport_type,
+    medical_issue, medical_type,
+    doctor_visits, visit_type,
+    regular_medication, medication_type,
+    sports_activity_h_per_week,
+    earning_chf,
+    include_explanation: true
+  };
+}
+
+async function handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts }) {
+  try {
+    setError("");
+    setLoading(true);
+    const payload = buildPayload(applicantData);
+    const result = await callPredictAPI(payload);
+    setDecision(result.decision || "");
+    setLastResult(result);
+    // Update SHAP impacts mapping for the category bars
+    const grouped = result?.explanation?.grouped_impacts || [];
+    const mapping = grouped.reduce((acc, g) => { acc[g.category] = Number(g.impact || 0); return acc; }, {});
+    updateShapImpacts(mapping);
+  } catch (e) {
+    console.error(e);
+    setError(String(e?.message || e));
+  } finally {
+    setLoading(false);
+  }
+}
 export default function CaseDecision({ onBack }) {
   const model_decision = "reject";
   const applicantData = {
@@ -146,15 +267,18 @@ export default function CaseDecision({ onBack }) {
 
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [decision, setDecision] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [lastResult, setLastResult] = useState(null);
 
   const toggleExpand = (cat) =>
     setExpandedCategory(expandedCategory === cat ? null : cat);
 
   // Persisted SHAP-like impact values (stable across re-renders and page reloads)
-  const [shapImpacts] = useState(() => {
-    const storageKey = "shapImpacts_v1";
+  const SHAP_STORAGE_KEY = "shapImpacts_v1";
+  const [shapImpacts, setShapImpacts] = useState(() => {
     try {
-      const raw = localStorage.getItem(storageKey);
+      const raw = localStorage.getItem(SHAP_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         const categoryKeys = Object.keys(applicantData.categories);
@@ -170,14 +294,20 @@ export default function CaseDecision({ onBack }) {
       return acc;
     }, {});
 
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(generated));
-    } catch (e) {
-      // ignore storage errors
-    }
+    try { localStorage.setItem(SHAP_STORAGE_KEY, JSON.stringify(generated)); } catch {}
 
     return generated;
   });
+
+  const updateShapImpacts = (newMap) => {
+    try {
+      const merged = { ...shapImpacts, ...newMap };
+      localStorage.setItem(SHAP_STORAGE_KEY, JSON.stringify(merged));
+      setShapImpacts(merged);
+    } catch {
+      setShapImpacts({ ...shapImpacts, ...newMap });
+    }
+  };
 
 const getImpactColor = (value) => {
   // value normalized between -1 (protective) and 1 (high risk)
@@ -220,6 +350,30 @@ const getImpactColor = (value) => {
         zIndex: 10
       }}
     >
+      {/* Action button above the page title */}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginBottom: "0.75rem", alignItems: "center" }}>
+        {decision && (
+          <span style={{
+            padding: "6px 10px",
+            borderRadius: 8,
+            background: "#f0f3ff",
+            color: "#2c3e50",
+            fontWeight: 700,
+            border: "1px solid #dce3ff"
+          }}>
+            Decision: {String(decision)} {lastResult?.score != null ? `(${(lastResult.score*100).toFixed(1)}%)` : ""}
+          </span>
+        )}
+        <button
+          className="btn-run-analysis"
+          style={{ width: "auto" }}
+          type="button"
+          disabled={loading}
+          onClick={() => handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts })}
+        >
+          {loading ? "Calculating..." : "Run Calculation"}
+        </button>
+      </div>
       <h1>Life Insurance Analysis</h1>
 
       {/* Back Button */}
@@ -377,6 +531,49 @@ const getImpactColor = (value) => {
             );
         })}
       </section>
+
+      {/* Optional server-side SHAP summary for this client */}
+      {lastResult?.explanation?.top_features && (
+        <section
+          style={{
+            backgroundColor: "#eef6ff",
+            padding: "1rem",
+            borderRadius: "8px",
+            marginTop: "1.25rem",
+            border: "1px solid #d6e9ff"
+          }}
+        >
+          <h2>SHAP Waterfall (top contributors)</h2>
+          <p style={{ marginTop: 0, color: "#4a5568" }}>
+            Target class: <strong>{lastResult.explanation.target_class}</strong>
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {lastResult.explanation.top_features.slice(0, 12).map((f, idx) => {
+              const val = Number(f.impact || 0);
+              const pos = val >= 0;
+              const width = Math.min(100, Math.round(Math.abs(val) * 100));
+              return (
+                <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: "0 0 240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.feature}</div>
+                  <div style={{ flex: 1, height: 12, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, position: "relative" }}>
+                    <div style={{
+                      position: "absolute",
+                      left: pos ? 0 : `calc(50% - ${width/2}%)`,
+                      right: pos ? undefined : undefined,
+                      height: "100%",
+                      width: `${width}%`,
+                      background: pos ? "#ef4444" : "#10b981",
+                      borderRadius: 6,
+                      transform: pos ? "translateX(0)" : "translateX(0)"
+                    }} />
+                  </div>
+                  <div style={{ width: 70, textAlign: "right", color: "#374151" }}>{val.toFixed(3)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Model explanation */}
       <section
