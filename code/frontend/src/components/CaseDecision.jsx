@@ -642,6 +642,11 @@ const getImpactColor = (value) => {
                 alert("Please select a decision before submitting.");
                 return;
               }
+              // Prevent submitting accept for empty documents
+              if (decision === 'accept' && isEmpty) {
+                alert("Cannot accept incomplete case. Please complete all required fields first.");
+                return;
+              }
               const pretty = (d) => d.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
               if (decision !== model_decision) {
                 const proceed = window.confirm(
