@@ -1,0 +1,78 @@
+Metadata-Version: 2.4
+Name: backend
+Version: 0.1.0
+Summary: FastAPI backend for BaselHacks PAX document processing
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: dotenv>=0.9.9
+Requires-Dist: fastapi>=0.120.4
+Requires-Dist: httpx>=0.28.1
+Requires-Dist: openai>=2.6.1
+Requires-Dist: pillow>=10.0.0
+Requires-Dist: pydantic>=2.12.3
+Requires-Dist: pypdf2>=3.0.1
+Requires-Dist: python-multipart>=0.0.20
+Requires-Dist: uvicorn>=0.38.0
+Requires-Dist: numpy>=1.26.4
+Requires-Dist: pandas>=2.2.2
+Requires-Dist: scikit-learn>=1.4.2
+Requires-Dist: xgboost>=2.0.3
+Requires-Dist: shap>=0.45.0
+Requires-Dist: joblib>=1.4.2
+
+# PAX Backend
+
+FastAPI backend for document processing and data extraction.
+
+## Setup
+
+```bash
+cd code/backend
+pip install -e .
+```
+
+## Run
+
+```bash
+python main.py
+```
+
+or
+
+```bash
+uv run uvicorn main:app --reload
+```
+
+The API will be available at **http://localhost:8000**
+
+## API Endpoints
+
+- `GET /` - Health check
+- `POST /upload` - Upload PDF and extract data (mock 2s delay)
+- `PUT /save/{doc_id}` - Save/update document data
+- `GET /documents` - List all stored documents (summary: id, filename, uploaded_at)
+- `GET /documents/{doc_id}` - Get full document data by ID
+- `GET /pdf/{doc_id}` - Retrieve original PDF file
+
+## Data Storage
+
+- **JSON metadata**: `data/{doc_id}.json` - Extracted data (10 fields)
+- **PDF files**: `data/pdfs/{doc_id}.pdf` - Original uploaded documents
+
+## Extracted Fields
+
+Each document extracts 10 fields:
+- `id` - Unique document identifier
+- `filename` - Original PDF filename
+- `age` - Age (integer)
+- `sex` - Sex (Male/Female/Other)
+- `address` - Full address
+- `occupation` - Job title
+- `sports` - Sports activities (free text)
+- `medical_conditions` - Medical history
+- `smoker` - Yes/No
+- `height_cm` - Height in centimeters
+- `weight_kg` - Weight in kilograms
+- `annual_income` - Annual income with currency
+- `uploaded_at` - Upload timestamp
+- `pdf_path` - Relative path to PDF file

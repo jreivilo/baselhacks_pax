@@ -1,8 +1,76 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 
 const API_BASE = '/api'
 
+// Function to validate a single field
+function isFieldValid(field, value) {
+  if (value === null || value === undefined) return false
+  if (typeof value === 'string' && value.trim() === '') return false
+  // Boolean false is a valid value, so don't reject it
+  if (typeof value === 'boolean') return true
+  // For numbers, NaN is invalid, but 0 might be valid for some fields
+  if (typeof value === 'number' && isNaN(value)) return false
+  
+  // For required numeric fields, 0 is typically invalid (age, height, weight can't be 0)
+  // But allow 0 for optional fields like packs_per_week, drug_frequency
+  const requiredNumericFields = ['age', 'height_cm', 'weight_kg', 'earning_chf']
+  if (requiredNumericFields.includes(field) && typeof value === 'number' && value === 0) {
+    return false
+  }
+  
+  return true
+}
+
+// Function to check if a document is incomplete (missing required fields)
+function isDocumentIncomplete(doc) {
+  if (!doc) return true
+  
+  // BMI is now required (must be filled)
+  const requiredFields = [
+    'age', 'gender', 'address', 'occupation', 'height_cm', 'weight_kg', 'bmi',
+    'medical_conditions', 'sports', 'annual_income', 'birthdate', 
+    'marital_status', 'smoking', 'drug_use', 'drug_type', 'staying_abroad',
+    'abroad_type', 'dangerous_sports', 'sport_type', 'medical_issue',
+    'medical_type', 'doctor_visits', 'visit_type', 'regular_medication',
+    'medication_type', 'earning_chf', 'packs_per_week', 'drug_frequency',
+    'sports_activity_h_per_week'
+  ]
+  
+  // Check if any required field is invalid
+  return requiredFields.some(field => {
+    return !isFieldValid(field, doc[field])
+  })
+}
+
 export default function DocumentList({ documents, selectedId, onSelect, loading, onDelete }){
+  const [incompleteDocs, setIncompleteDocs] = useState(new Set())
+
+  // Check which documents are incomplete
+  useEffect(() => {
+    async function checkIncompleteDocuments() {
+      const incompleteSet = new Set()
+      
+      for (const doc of documents) {
+        try {
+          const response = await fetch(`${API_BASE}/documents/${doc.id}`)
+          if (response.ok) {
+            const fullDoc = await response.json()
+            if (isDocumentIncomplete(fullDoc)) {
+              incompleteSet.add(doc.id)
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to check document ${doc.id}:`, error)
+        }
+      }
+      
+      setIncompleteDocs(incompleteSet)
+    }
+    
+    if (documents.length > 0) {
+      checkIncompleteDocuments()
+    }
+  }, [documents])
   
   async function handleDelete(docId, event){
     event.stopPropagation() // Prevent selecting the document
@@ -59,7 +127,7 @@ export default function DocumentList({ documents, selectedId, onSelect, loading,
       </div>
       
       <ul className="document-items">
-        {documents.map(doc => {
+        {documents.map((doc) => {
           // Format date - show only month and year
           const formatDate = (dateStr) => {
             if (!dateStr || dateStr === 'Unknown') return 'Unknown';
@@ -67,24 +135,41 @@ export default function DocumentList({ documents, selectedId, onSelect, loading,
             return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
           };
 
+          const isIncomplete = incompleteDocs.has(doc.id);
+          
+          // Determine status: incomplete > prediction > complete > pending
+          let status = 'pending'
+          let statusClass = 'status-pending'
+          
+          if (isIncomplete) {
+            status = 'incomplete'
+            statusClass = 'status-incomplete'
+          } else if (doc.model_prediction) {
+            status = doc.model_prediction.toLowerCase()
+            statusClass = `status-${status}`
+          } else if (doc.human_prediction) {
+            status = doc.human_prediction.toLowerCase()
+            statusClass = `status-${status}`
+          } else {
+            status = 'complete'
+            statusClass = 'status-complete'
+          }
+
           return (
             <li 
               key={doc.id}
               className={`document-item ${selectedId === doc.id ? 'active' : ''}`}
               onClick={() => onSelect(doc.id)}
             >
-              <div className="doc-icon">📄</div>
+              <div className={`doc-icon ${isIncomplete ? 'doc-icon-incomplete' : ''}`}>
+                {isIncomplete ? '⚠️' : '📄'}
+              </div>
               <div className="doc-info">
                 <h3 className="doc-title">{doc.name || doc.filename}</h3>
                 <p className="doc-date">{formatDate(doc.uploaded_at)}</p>
-                {doc.prediction && (
-                  <span className={`doc-status status-${doc.prediction.toLowerCase()}`}>
-                    STATUS: {doc.prediction}
-                  </span>
-                )}
-                {!doc.prediction && (
-                  <span className="doc-status status-pending">STATUS: Pending</span>
-                )}
+                <span className={`doc-status ${statusClass}`}>
+                  STATUS: {status.charAt(0).toUpperCase() + status.slice(1)}
+                </span>
               </div>
               <button 
                 className="btn-delete-small"

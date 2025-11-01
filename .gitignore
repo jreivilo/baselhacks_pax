@@ -1,4 +1,3 @@
-*.json
 *.pdf
 __pycache__/
 *.pyc
