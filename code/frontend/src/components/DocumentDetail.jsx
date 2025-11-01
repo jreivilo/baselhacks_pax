@@ -7,6 +7,9 @@ export default function DocumentDetail({ documentId, onUpdate }){
   const [loading, setLoading] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState(null)
+  const [showPdf, setShowPdf] = useState(true)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [tempName, setTempName] = useState('')
 
   useEffect(() => {
     if(documentId){
@@ -23,11 +26,37 @@ export default function DocumentDetail({ documentId, onUpdate }){
       const docData = await response.json()
       setData(docData)
       setFormData(docData)
+      setTempName(docData.name || docData.filename)
     } catch(error){
       console.error('Failed to load document:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleNameSave(){
+    try{
+      const response = await fetch(`${API_BASE}/documents/${documentId}/name`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: tempName })
+      })
+      
+      if(!response.ok) throw new Error('Name update failed')
+      
+      setData(prev => ({ ...prev, name: tempName }))
+      setFormData(prev => ({ ...prev, name: tempName }))
+      setIsEditingName(false)
+      onUpdate()
+    } catch(error){
+      console.error('Name update error:', error)
+      alert('Failed to update name')
+    }
+  }
+
+  function handleNameCancel(){
+    setTempName(data.name || data.filename)
+    setIsEditingName(false)
   }
 
   function handleChange(field, value){
@@ -88,13 +117,36 @@ export default function DocumentDetail({ documentId, onUpdate }){
   return (
     <div className="document-detail">
       <div className="document-detail-header">
-        <div>
-          <h2>{data.filename}</h2>
-          <p className="document-meta">Uploaded: {data.uploaded_at}</p>
+        <div className="header-title-section">
+          {isEditingName ? (
+            <div className="name-edit-container">
+              <input 
+                type="text" 
+                value={tempName} 
+                onChange={(e) => setTempName(e.target.value)}
+                className="name-edit-input"
+                autoFocus
+              />
+              <button className="btn-save-small" onClick={handleNameSave}>✓</button>
+              <button className="btn-cancel-small" onClick={handleNameCancel}>✕</button>
+            </div>
+          ) : (
+            <h2 onClick={() => setIsEditingName(true)} className="editable-title" title="Click to edit name">
+              {data.name || data.filename}
+            </h2>
+          )}
+          <p className="document-meta">File: {data.filename} | Uploaded: {data.uploaded_at}</p>
         </div>
         <div className="document-detail-actions">
+          <button 
+            className="btn-toggle-pdf" 
+            onClick={() => setShowPdf(!showPdf)}
+            title={showPdf ? "Hide PDF" : "Show PDF"}
+          >
+            {showPdf ? "Hide PDF" : "Show PDF"}
+          </button>
           {!isEditing ? (
-            <button className="btn-edit" onClick={() => setIsEditing(true)}>Edit</button>
+            <button className="btn-edit" onClick={() => setIsEditing(true)}>Edit Data</button>
           ) : (
             <>
               <button className="btn-save" onClick={handleSave}>Save</button>
@@ -105,13 +157,15 @@ export default function DocumentDetail({ documentId, onUpdate }){
       </div>
 
       <div className="detail-split-view">
-        <div className="pdf-viewer-container">
-          <iframe 
-            src={`${API_BASE}/pdf/${documentId}`}
-            className="pdf-viewer"
-            title="Document PDF"
-          />
-        </div>
+        {showPdf && (
+          <div className="pdf-viewer-container">
+            <iframe 
+              src={`${API_BASE}/pdf/${documentId}`}
+              className="pdf-viewer"
+              title="Document PDF"
+            />
+          </div>
+        )}
 
         <div className="data-section">
           <div className="detail-grid">

@@ -32,6 +32,15 @@ export default function App(){
     setShowUploadModal(false)
   }
 
+  function handleDocumentDeleted(deletedId){
+    // If the deleted document was selected, clear selection
+    if(selectedDocId === deletedId){
+      setSelectedDocId(null)
+    }
+    // Reload the document list
+    loadDocuments()
+  }
+
   return (
     <div className="app-root">
       <header className="app-header">
@@ -50,6 +59,7 @@ export default function App(){
           documents={documents} 
           selectedId={selectedDocId}
           onSelect={setSelectedDocId}
+          onDelete={handleDocumentDeleted}
           loading={loading}
         />
         

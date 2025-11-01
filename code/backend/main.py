@@ -30,6 +30,7 @@ PDF_DIR.mkdir(exist_ok=True)
 class DocumentData(BaseModel):
     id: str
     filename: str
+    name: str = None  # Display name for the document/case
     age: int
     sex: str
     address: str
@@ -42,6 +43,9 @@ class DocumentData(BaseModel):
     annual_income: str
     uploaded_at: str = None
     pdf_path: str = None
+
+class DocumentNameUpdate(BaseModel):
+    name: str
 
 @app.get("/")
 def read_root():
@@ -71,6 +75,7 @@ async def upload_document(file: UploadFile = File(...)) -> Dict[str, Any]:
     extracted_data = {
         "id": doc_id,
         "filename": file.filename,
+        "name": file.filename,  # Default name is the filename
         "age": 35,
         "sex": "Male",
         "address": "123 Basel Street, 4051 Basel, Switzerland",
@@ -121,6 +126,7 @@ async def list_documents() -> Dict[str, Any]:
             documents.append({
                 "id": data.get("id"),
                 "filename": data.get("filename"),
+                "name": data.get("name", data.get("filename")),  # Use name if available, fallback to filename
                 "uploaded_at": data.get("uploaded_at", "Unknown")
             })
     
@@ -157,6 +163,49 @@ async def get_pdf(doc_id: str):
         media_type="application/pdf",
         headers={"Content-Disposition": "inline"}
     )
+
+@app.patch("/documents/{doc_id}/name")
+async def update_document_name(doc_id: str, update: DocumentNameUpdate) -> Dict[str, Any]:
+    """
+    Update the display name of a document.
+    """
+    data_file = DATA_DIR / f"{doc_id}.json"
+    
+    if not data_file.exists():
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Load existing data
+    with open(data_file) as f:
+        data = json.load(f)
+    
+    # Update name
+    data["name"] = update.name
+    
+    # Save updated data
+    with open(data_file, "w") as f:
+        json.dump(data, f, indent=2)
+    
+    return {"status": "success", "message": f"Document name updated", "name": update.name}
+
+@app.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str) -> Dict[str, Any]:
+    """
+    Delete a document and its associated PDF file.
+    """
+    data_file = DATA_DIR / f"{doc_id}.json"
+    pdf_file = PDF_DIR / f"{doc_id}.pdf"
+    
+    if not data_file.exists():
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Delete JSON file
+    data_file.unlink()
+    
+    # Delete PDF file if it exists
+    if pdf_file.exists():
+        pdf_file.unlink()
+    
+    return {"status": "success", "message": f"Document {doc_id} deleted"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,6 +1,29 @@
 import React from 'react'
 
-export default function DocumentList({ documents, selectedId, onSelect, loading }){
+const API_BASE = 'http://localhost:8000'
+
+export default function DocumentList({ documents, selectedId, onSelect, loading, onDelete }){
+  
+  async function handleDelete(docId, event){
+    event.stopPropagation() // Prevent selecting the document
+    
+    if(!confirm('Are you sure you want to delete this case? This action cannot be undone.')){
+      return
+    }
+    
+    try{
+      const response = await fetch(`${API_BASE}/documents/${docId}`, {
+        method: 'DELETE'
+      })
+      
+      if(!response.ok) throw new Error('Delete failed')
+      
+      onDelete(docId)
+    } catch(error){
+      console.error('Delete error:', error)
+      alert('Failed to delete case')
+    }
+  }
   
   if(loading){
     return (
@@ -44,10 +67,17 @@ export default function DocumentList({ documents, selectedId, onSelect, loading 
           >
             <div className="doc-icon">📄</div>
             <div className="doc-info">
-              <h3 className="doc-title">{doc.filename}</h3>
+              <h3 className="doc-title">{doc.name || doc.filename}</h3>
               <p className="doc-date">{doc.uploaded_at}</p>
               <p className="doc-id">ID: {doc.id.slice(0, 8)}...</p>
             </div>
+            <button 
+              className="btn-delete-small"
+              onClick={(e) => handleDelete(doc.id, e)}
+              title="Delete case"
+            >
+              🗑️
+            </button>
           </li>
         ))}
       </ul>
