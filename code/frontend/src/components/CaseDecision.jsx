@@ -1,137 +1,57 @@
 import React, { useState } from "react";
 
 const API_BASE = '/api'
-export default function CaseDecision({ onBack }) {
+export default function CaseDecision({ onBack , data}) {
   const model_decision = "reject";
-  const applicantData = {
+ const applicantData = {
     general: {
-      name: "Jane Doe",
-      birthdate: "2004-04-12",
-      address: "123 Maple Street, Vancouver, Canada"
+      name: data?.name || "Applicant",
+      birthdate: data?.birthdate || "Not provided",
+      address: "—"
     },
     categories: {
-  "Gender": [
-    { "question": "What is your gender?", "answer": "Male" },
-    { "question": "Have you ever legally changed your gender marker?", "answer": "No" },
-    { "question": "Do you identify with your registered gender for official records?", "answer": "Yes" },
-  ],
-  "Age": [
-    { "question": "What is your current age?", "answer": 21 },
-    { "question": "Please provide your date of birth.", "answer": "2003-07-12 (approx.)" },
-    { "question": "Has your age been verified through an official ID document?", "answer": "Yes" },
-   {"dependency_plot_path": "/dep_plots/dependency_plots/age.png"}
-  ],
-  "Marital Status": [
-    { "question": "What is your current marital status?", "answer": "Divorced" },
-    { "question": "Have you experienced a change in marital status within the past 5 years?", "answer": "No" },
-    { "question": "Do you have any dependents (spouse, children, etc.)?", "answer": "No" }
-  ],
-  "Height (cm)": [
-    { "question": "What is your height in centimeters?", "answer": 170.2 },
-    { "question": "When was this height last measured?", "answer": "Within the last year" },
-    { "question": "Has your height changed significantly in the past year?", "answer": "No" }
-  ],
-  "Weight (kg)": [
-    { "question": "What is your current weight in kilograms?", "answer": 80.2 },
-    { "question": "Was your weight measured with shoes or without?", "answer": "Without shoes" },
-    { "question": "Has your weight changed by more than 5 kg in the past year?", "answer": "No" }
-  ],
-  "BMI": [
-    { "question": "Do you know your current Body Mass Index (BMI)?", "answer": 27.7 },
-    { "question": "Has your BMI been medically evaluated as normal, underweight, or overweight?", "answer": "Slightly overweight" },
-    { "question": "Have you been advised to make lifestyle changes due to your BMI?", "answer": "No" },
-    {"dependency_plot_path": "/dep_plots/dependency_plots/bmi.png"}
-  ],
-  "Smoking": [
-    { "question": "Do you currently smoke cigarettes or other tobacco products?", "answer": "Yes" },
-    { "question": "Have you smoked regularly in the past?", "answer": "Yes" },
-    { "question": "When did you start smoking?", "answer": "Around age 18" },
-    {"dependency_plot_path": "/dep_plots/dependency_plots/smoking.png"}
-  ],
-  "Packs per Week": [
-    { "question": "On average, how many cigarette packs do you smoke per week?", "answer": 0 },
-    { "question": "Has your smoking frequency changed in the last year?", "answer": "Decreased" },
-    { "question": "Do you plan to quit smoking within the next 6 months?", "answer": "Yes" }
-  ],
-  "Drug Use": [
-    { "question": "Do you currently use recreational or non-prescription drugs?", "answer": "No" },
-    { "question": "Have you ever received treatment for substance use?", "answer": "No" },
-    { "question": "Do you take any controlled substances not prescribed to you?", "answer": "No" }
-  ],
-  "Drug Frequency": [
-    { "question": "If applicable, how often do you use drugs per week?", "answer": 0.0 },
-    { "question": "When was the last time you used recreational drugs?", "answer": "Never" },
-    { "question": "Have you ever been advised to stop drug use by a healthcare professional?", "answer": "No" },
-       {"dependency_plot_path": "/dep_plots/dependency_plots/drug_frequency.png"}
-
-  ],
-  "Drug Type": [
-    { "question": "What type of drugs do you use or have used in the past?", "answer": "None" },
-    { "question": "Were any of these substances prescribed?", "answer": "No" },
-    { "question": "Would you categorize your usage as safe, occasional, or high-risk?", "answer": "Safe" }
-  ],
-  "Staying Abroad": [
-    { "question": "Do you currently live or stay outside your home country for extended periods?", "answer": "No" },
-    { "question": "Have you traveled abroad in the last 12 months?", "answer": "Yes, for leisure" },
-    { "question": "Do you plan to move or stay abroad in the next 12 months?", "answer": "No" }
-  ],
-  "Abroad Type": [
-    { "question": "What is the nature of your stay abroad (work, study, leisure, other)?", "answer": "Leisure" },
-    { "question": "Would you consider the countries you stay in as low, moderate, or high-risk regions?", "answer": "Safe" },
-    { "question": "Do you have health coverage while abroad?", "answer": "Yes" }
-  ],
-  "Dangerous Sports": [
-    { "question": "Do you participate in any high-risk or extreme sports?", "answer": "No" },
-    { "question": "How often do you engage in such activities?", "answer": "Never" },
-    { "question": "Have you ever been injured while engaging in such sports?", "answer": "No" }
-  ],
-  "Sport Type": [
-    { "question": "What type of sport or activity do you practice regularly?", "answer": "Occasional jogging" },
-    { "question": "Would you classify it as low, moderate, or high-risk?", "answer": "Warning" },
-    { "question": "Do you use safety gear or have training for it?", "answer": "Yes" },
-  ],
-  "Medical Issue": [
-    { "question": "Do you have any chronic or long-term medical conditions?", "answer": "No" },
-    { "question": "Have you been hospitalized in the last 5 years?", "answer": "No" },
-    { "question": "Do you currently have any untreated or ongoing health concerns?", "answer": "No" }
-  ],
-  "Medical Type": [
-    { "question": "How would you categorize your medical condition (safe, warning, danger)?", "answer": "Warning" },
-    { "question": "Has a physician provided documentation about your condition?", "answer": "N/A" },
-    { "question": "Is your condition currently being managed with medical supervision?", "answer": "N/A" }
-  ],
-  "Doctor Visits": [
-    { "question": "Do you visit a doctor regularly for check-ups?", "answer": "Yes" },
-    { "question": "What type of doctor do you visit most frequently?", "answer": "Physician" },
-    { "question": "When was your last visit to a healthcare provider?", "answer": "3 months ago" }
-  ],
-  "Visit Type": [
-    { "question": "What type of medical professional do you usually consult?", "answer": "Physician" },
-    { "question": "Is your doctor part of a family health plan or private clinic?", "answer": "Private clinic" },
-    { "question": "Do you maintain regular health records?", "answer": "Yes" }
-  ],
-  "Regular Medication": [
-    { "question": "Do you currently take any prescribed medication on a regular basis?", "answer": "No" },
-    { "question": "Have you been on long-term medication in the past 5 years?", "answer": "No" },
-    { "question": "Do you experience any side effects from your medications?", "answer": "No" }
-  ],
-  "Medication Type": [
-    { "question": "What is the nature of your regular medication (safe, warning, danger)?", "answer": "Warning" },
-    { "question": "Is your medication prescribed by a licensed healthcare provider?", "answer": "N/A" },
-    { "question": "Are any of your medications considered controlled substances?", "answer": "No" }
-  ],
-  "Sports Activity (hours/week)": [
-    { "question": "How many hours per week do you engage in sports or physical activity?", "answer": 0 },
-    { "question": "Do you maintain a consistent exercise routine?", "answer": "No" },
-    { "question": "Have you been advised to increase your physical activity?", "answer": "Yes" },
-    {"dependency_plot_path": "/dep_plots/dependency_plots/sport_hours.png"}
-  ],
-  "Earning (CHF)": [
-    { "question": "What is your current annual income in CHF?", "answer": 228916 },
-    { "question": "Do you have additional income sources besides your main occupation?", "answer": "No" },
-    { "question": "Has your income remained stable over the past 2 years?", "answer": "Yes" }
-  ]
-}, 
+      "Gender": [
+        { question: "What is your gender?", answer: data.gender },
+        { question: "Do you identify with your registered gender?", answer: "Yes" }
+      ],
+      "Age": [
+        { question: "What is your current age?", answer: data.age },
+        { question: "Has your age been verified through official ID?", answer: "Yes" }
+      ],
+      "Marital Status": [
+        { question: "What is your marital status?", answer: data.marital_status }
+      ],
+      "BMI": [
+        { question: "What is your BMI?", answer: data.bmi },
+        { question: "Height (cm)", answer: data.height_cm },
+        { question: "Weight (kg)", answer: data.weight_kg }
+      ],
+      "Smoking": [
+        { question: "Do you smoke?", answer: data.smoking ? "Yes" : "No" },
+        { question: "Packs per week", answer: data.packs_per_week }
+      ],
+      "Drug Use": [
+        { question: "Do you use recreational drugs?", answer: data.drug_use ? "Yes" : "No" },
+        { question: "Frequency (per week)", answer: data.drug_frequency },
+        { question: "Type", answer: data.drug_type }
+      ],
+      "Medical": [
+        { question: "Do you have any medical issues?", answer: data.medical_issue ? "Yes" : "No" },
+        { question: "Condition severity", answer: data.medical_type }
+      ],
+      "Doctor Visits": [
+        { question: "Do you visit a doctor regularly?", answer: data.doctor_visits ? "Yes" : "No" },
+        { question: "Type of doctor", answer: data.visit_type }
+      ],
+      "Sports": [
+        { question: "Do you play dangerous sports?", answer: data.dangerous_sports ? "Yes" : "No" },
+        { question: "Sport type", answer: data.sport_type },
+        { question: "Activity hours per week", answer: data.sports_activity_h_per_week }
+      ],
+      "Financial": [
+        { question: "Annual earning (CHF)", answer: data.earning_chf }
+      ]
+    },
     modelExplanation:
       `Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk.`,
     non_modelFactors:
@@ -461,34 +381,38 @@ const getImpactColor = (value) => {
             <input type="radio" name="decision" value="reject" /> Reject
           </label>
           <br />
-          <label style={{ display: "block", marginTop: "0.75rem" }}>
-            <div style={{ fontSize: "0.95rem", marginBottom: "0.35rem" }}>
-              Additional comments (optional)
-            </div>
-            <textarea
-              id="additional_comments"
-              name="additional_comments"
-              rows="3"
-              placeholder="Any notes for underwriting or context..."
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-                fontSize: "0.95rem",
-                resize: "vertical",
-                boxSizing: "border-box"
-              }}
-            />
-          </label>
-          {/* <label>
+          <label>
             <input type="radio" name="decision" value="accept_high_premium" /> Accept with Higher Premium
-          </label> */}
+          </label>
+
+
+        </div>
+          <div style={{ marginTop: "1rem" }}>
+          <div style={{ fontSize: "0.95rem", marginBottom: "0.35rem" }}>
+            Additional comments (optional)
+          </div>
+          <textarea
+            id="additional_comments"
+            name="additional_comments"
+            rows="3"
+            placeholder="Any notes for underwriting or context..."
+            style={{
+              width: "100%",
+              padding: "0.5rem",
+              borderRadius: "4px",
+              border: "1px solid #ccc",
+              fontSize: "0.95rem",
+              resize: "vertical",
+              boxSizing: "border-box"
+            }}
+          />
         </div>
         {decision && (
           <p style={{ marginTop: "1rem" }}>
             <strong>Selected decision:</strong>{" "}
-            {decision.replace(/_/g, " ")}
+            {decision
+              .replace(/_/g, " ")
+              .replace(/\b\w/g, (c) => c.toUpperCase())}
           </p>
         )}
         <div style={{ marginTop: "1rem" , display: "flex", justifyContent: "flex-end" }}>
