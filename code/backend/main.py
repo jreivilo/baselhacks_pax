@@ -30,6 +30,7 @@ PDF_DIR.mkdir(exist_ok=True)
 class DocumentData(BaseModel):
     id: str
     filename: str
+    name: str = None  # Display name for the document/case
     age: int
     sex: str
     address: str
@@ -42,6 +43,10 @@ class DocumentData(BaseModel):
     annual_income: str
     uploaded_at: str = None
     pdf_path: str = None
+    prediction: str = None  # "Accepted" or "Rejected"
+
+class DocumentNameUpdate(BaseModel):
+    name: str
 
 @app.get("/")
 def read_root():
@@ -71,6 +76,7 @@ async def upload_document(file: UploadFile = File(...)) -> Dict[str, Any]:
     extracted_data = {
         "id": doc_id,
         "filename": file.filename,
+        "name": file.filename,  # Default name is the filename
         "age": 35,
         "sex": "Male",
         "address": "123 Basel Street, 4051 Basel, Switzerland",
@@ -82,7 +88,8 @@ async def upload_document(file: UploadFile = File(...)) -> Dict[str, Any]:
         "weight_kg": 75,
         "annual_income": "CHF 95,000",
         "uploaded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "pdf_path": f"pdfs/{doc_id}.pdf"
+        "pdf_path": f"pdfs/{doc_id}.pdf",
+        "prediction": None  # No prediction yet
     }
     
     # Save to JSON file
@@ -121,7 +128,9 @@ async def list_documents() -> Dict[str, Any]:
             documents.append({
                 "id": data.get("id"),
                 "filename": data.get("filename"),
-                "uploaded_at": data.get("uploaded_at", "Unknown")
+                "name": data.get("name", data.get("filename")),  # Use name if available, fallback to filename
+                "uploaded_at": data.get("uploaded_at", "Unknown"),
+                "prediction": data.get("prediction")  # Include prediction status
             })
     
     # Sort by uploaded_at descending
@@ -157,6 +166,87 @@ async def get_pdf(doc_id: str):
         media_type="application/pdf",
         headers={"Content-Disposition": "inline"}
     )
+
+@app.patch("/documents/{doc_id}/name")
+async def update_document_name(doc_id: str, update: DocumentNameUpdate) -> Dict[str, Any]:
+    """
+    Update the display name of a document.
+    """
+    data_file = DATA_DIR / f"{doc_id}.json"
+    
+    if not data_file.exists():
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Load existing data
+    with open(data_file) as f:
+        data = json.load(f)
+    
+    # Update name
+    data["name"] = update.name
+    
+    # Save updated data
+    with open(data_file, "w") as f:
+        json.dump(data, f, indent=2)
+    
+    return {"status": "success", "message": f"Document name updated", "name": update.name}
+
+@app.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str) -> Dict[str, Any]:
+    """
+    Delete a document and its associated PDF file.
+    """
+    data_file = DATA_DIR / f"{doc_id}.json"
+    pdf_file = PDF_DIR / f"{doc_id}.pdf"
+    
+    if not data_file.exists():
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Delete JSON file
+    data_file.unlink()
+    
+    # Delete PDF file if it exists
+    if pdf_file.exists():
+        pdf_file.unlink()
+    
+    return {"status": "success", "message": f"Document {doc_id} deleted"}
+
+@app.post("/documents/{doc_id}/analyze")
+async def run_analysis(doc_id: str) -> Dict[str, Any]:
+    """
+    Run risk analysis on a document and update prediction.
+    Simulates AI analysis with 3 second delay.
+    """
+    data_file = DATA_DIR / f"{doc_id}.json"
+    
+    if not data_file.exists():
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Load existing data
+    with open(data_file) as f:
+        data = json.load(f)
+    
+    # Simulate analysis time
+    await asyncio.sleep(3)
+    
+    # Mock prediction based on simple rules
+    import random
+    
+    # Weighted random: 70% Accepted, 30% Rejected
+    prediction = "Accepted" if random.random() < 0.7 else "Rejected"
+    
+    # Update prediction
+    data["prediction"] = prediction
+    
+    # Save updated data
+    with open(data_file, "w") as f:
+        json.dump(data, f, indent=2)
+    
+    return {
+        "status": "success",
+        "message": "Analysis complete",
+        "prediction": prediction,
+        "data": data
+    }
 
 if __name__ == "__main__":
     import uvicorn
