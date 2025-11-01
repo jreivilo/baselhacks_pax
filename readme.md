@@ -14,8 +14,7 @@ A full-stack application for automated document processing and underwriting data
 
 ```bash
 cd code/backend
-pip install -e .
-python main.py
+uv run uvicorn main:app --reload
 ```
 
 Backend runs on **http://localhost:8000**

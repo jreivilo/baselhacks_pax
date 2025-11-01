@@ -183,7 +183,16 @@ export default function DocumentDetail({ documentId, onUpdate }){
 
   if(!documentId){
     return (
-      <div className="document-detail">
+      <div
+        className="document-detail"
+        style={{
+          minHeight: '100vh',
+          backgroundColor: '#ffffff',
+          position: 'relative',
+          zIndex: 10,
+          padding: '1rem'
+        }}
+      >
         <div className="document-detail-empty">
           <p>Select a life insurance case to view details</p>
         </div>
@@ -193,7 +202,16 @@ export default function DocumentDetail({ documentId, onUpdate }){
 
   if(loading){
     return (
-      <div className="document-detail">
+      <div
+        className="document-detail"
+        style={{
+          minHeight: '100vh',
+          backgroundColor: '#ffffff',
+          position: 'relative',
+          zIndex: 10,
+          padding: '1rem'
+        }}
+      >
         <div className="loading">Loading...</div>
       </div>
     )
@@ -201,14 +219,32 @@ export default function DocumentDetail({ documentId, onUpdate }){
 
   if(!data){
     return (
-      <div className="document-detail">
+      <div
+        className="document-detail"
+        style={{
+          minHeight: '100vh',
+          backgroundColor: '#ffffff',
+          position: 'relative',
+          zIndex: 10,
+          padding: '1rem'
+        }}
+      >
         <div className="error">Failed to load case</div>
       </div>
     )
   }
 
   return (
-    <div className="document-detail">
+    <div
+      className="document-detail"
+      style={{
+        minHeight: '100vh',
+        backgroundColor: '#ffffff',
+        position: 'relative',
+        zIndex: 10,
+        padding: '1rem'
+      }}
+    >
       <div className="document-detail-header">
         <div className="header-title-section">
           {isEditingName ? (
@@ -245,7 +281,14 @@ export default function DocumentDetail({ documentId, onUpdate }){
         </div>
       </div>
 
-      <div className="detail-split-view">
+      <div className="detail-split-view"
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          gap: "1rem",
+          minHeight: 0   // allow children with minHeight:0 to scroll properly
+        }}
+      >
         {showPdf && (
           <div className="pdf-viewer-container">
             <iframe 
@@ -256,7 +299,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           </div>
         )}
 
-        <div className="data-section">
+        <div className="data-section" style={{ flex: 1, minHeight: 0 }}>
           <div className="detail-grid">
         <div className="detail-field">
           <label>Age</label>
@@ -391,6 +434,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
             onToast={setToast}
             onRunAnalysis={handleRunAnalysis}
             isAnalyzing={isAnalyzing}
+            onBack={() => setShowAnalysis(false)}
           />
         )}
       </div>
