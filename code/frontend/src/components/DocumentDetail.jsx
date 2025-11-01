@@ -130,23 +130,10 @@ export default function DocumentDetail({ documentId, onUpdate }){
       if (saved) {
         try {
           const parsed = JSON.parse(saved)
-          // Apply defaults for missing name fields
-          const withDefaults = {
-            ...parsed,
-            first_name: parsed.first_name || 'John',
-            last_name: parsed.last_name || 'Doe'
-          }
-          setFormData(withDefaults)
+          setFormData(parsed)
         } catch (err) {
           console.error("Failed to parse saved form data:", err)
         }
-      } else {
-        // Initialize with defaults if no saved data
-        const defaultData = {
-          first_name: 'John',
-          last_name: 'Doe'
-        }
-        setFormData(defaultData)
       }
     }
   }, [documentId])
@@ -162,17 +149,11 @@ export default function DocumentDetail({ documentId, onUpdate }){
     try{
       const response = await fetch(`${API_BASE}/documents/${documentId}`)
       const docData = await response.json()
-      // Apply defaults for missing name fields
-      const dataWithDefaults = {
-        ...docData,
-        first_name: docData.first_name || 'John',
-        last_name: docData.last_name || 'Doe'
-      }
-      setData(dataWithDefaults)
-      setFormData(dataWithDefaults)
-      setTempName(dataWithDefaults.name || dataWithDefaults.filename)
+      setData(docData)
+      setFormData(docData)
+      setTempName(docData.name || docData.filename)
       // Validate fields on load
-      const invalid = getInvalidFields(dataWithDefaults)
+      const invalid = getInvalidFields(docData)
       setInvalidFields(invalid)
       
       // Generate dependency plots after data is loaded
@@ -566,12 +547,12 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <label>First Name</label>
           <input 
             type="text" 
-            value={formData?.first_name || 'John'} 
+            value={formData?.first_name || ''} 
             onChange={(e) => handleChange('first_name', e.target.value)} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'first_name', e.target.value)}
             onBlur={(e) => {
               handleFieldFocus('first_name')
-              handleFieldBlur('first_name', e.target.value || 'John')
+              handleFieldBlur('first_name', e.target.value)
             }}
             onFocus={() => handleFieldFocus('first_name')}
             className={invalidFields.has('first_name') ? 'input-invalid' : ''}
@@ -582,12 +563,12 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <label>Last Name</label>
           <input 
             type="text" 
-            value={formData?.last_name || 'Doe'} 
+            value={formData?.last_name || ''} 
             onChange={(e) => handleChange('last_name', e.target.value)} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'last_name', e.target.value)}
             onBlur={(e) => {
               handleFieldFocus('last_name')
-              handleFieldBlur('last_name', e.target.value || 'Doe')
+              handleFieldBlur('last_name', e.target.value)
             }}
             onFocus={() => handleFieldFocus('last_name')}
             className={invalidFields.has('last_name') ? 'input-invalid' : ''}

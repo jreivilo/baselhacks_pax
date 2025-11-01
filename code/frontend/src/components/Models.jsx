@@ -109,8 +109,40 @@ export default function Models() {
     }
   }
 
+  function handleApplyChanges() {
+    const acceptedPropositions = suggestions.filter(s => s.status === 'accepted')
+    
+    if (acceptedPropositions.length === 0) {
+      alert('No accepted propositions to apply.')
+      return
+    }
+
+    // Process accepted propositions
+    const acceptedIds = acceptedPropositions.map(p => p.id)
+    const propositionsToApply = acceptedIds.map(id => ({
+      id,
+      ...REPORT_CONTENT[id],
+      status: 'applied'
+    }))
+
+    // Here you would typically send this to a backend API
+    console.log('Applying accepted propositions:', propositionsToApply)
+    
+    // Update status to 'applied' for accepted propositions
+    setSuggestions(prev => 
+      prev.map(suggestion => 
+        suggestion.status === 'accepted'
+          ? { ...suggestion, status: 'applied' }
+          : suggestion
+      )
+    )
+
+    alert(`Successfully applied ${acceptedPropositions.length} model proposition(s).`)
+  }
+
   const report = selectedSuggestion ? REPORT_CONTENT[selectedSuggestion] : null
   const currentSuggestion = suggestions.find(s => s.id === selectedSuggestion)
+  const acceptedCount = suggestions.filter(s => s.status === 'accepted').length
 
   return (
     <div className="analytics-container">
@@ -135,6 +167,33 @@ export default function Models() {
               <p className="suggestion-description">{suggestion.description}</p>
             </button>
           ))}
+        </div>
+        <div className="sidebar-footer" style={{
+          padding: '16px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
+        }}>
+          <button
+            className="btn-apply-changes"
+            onClick={handleApplyChanges}
+            disabled={acceptedCount === 0}
+            style={{
+              width: '100%',
+              padding: '12px 20px',
+              backgroundColor: acceptedCount > 0 ? 'var(--pax-primary)' : 'var(--border)',
+              color: acceptedCount > 0 ? 'white' : 'rgba(0,0,0,0.5)',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '1rem',
+              fontWeight: 600,
+              cursor: acceptedCount > 0 ? 'pointer' : 'not-allowed',
+              transition: 'all 0.2s'
+            }}
+          >
+            Apply Changes {acceptedCount > 0 && `(${acceptedCount})`}
+          </button>
         </div>
       </div>
 

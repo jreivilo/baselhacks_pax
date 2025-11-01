@@ -446,6 +446,12 @@ async def upload_document(files: List[UploadFile] = File(...)) -> Dict[str, Any]
         # Merge workflow result with extracted data (all fields optional)
         if isinstance(workflow_result, dict):
             # Add all fields from workflow, keeping them optional
+            # Map surname to last_name for consistency with frontend
+            if 'surname' in workflow_result:
+                extracted_data['last_name'] = workflow_result.get('surname')
+            if 'first_name' in workflow_result:
+                extracted_data['first_name'] = workflow_result.get('first_name')
+            
             for key in ['gender', 'age', 'birthdate', 'marital_status', 'height_cm', 'weight_kg', 
                        'bmi', 'smoking', 'packs_per_week', 'drug_use', 'drug_frequency', 'drug_type',
                        'staying_abroad', 'abroad_type', 'dangerous_sports', 'sport_type', 
