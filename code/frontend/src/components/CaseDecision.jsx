@@ -370,23 +370,45 @@ const getImpactColor = (value) => {
     </div>
   </div>
   </section>
-      <section style={{ marginTop: "1.5rem" }}>
-        <h3>Underwriter Decision</h3>
-        <div onChange={(e) => setDecision(e.target.value)}>
-          <label>
-            <input type="radio" name="decision" value="accept" /> Accept
-          </label>
-          <br />
-          <label>
-            <input type="radio" name="decision" value="reject" /> Reject
-          </label>
-          <br />
-          <label>
-            <input type="radio" name="decision" value="accept_high_premium" /> Accept with Higher Premium
-          </label>
+      <section style={{  }}>
+        <div style={{  backgroundColor: "#f8f9fa", borderRadius: "8px", padding: "1rem" }}>
+          <div
+            style={{
+              padding: "1rem",
+              backgroundColor: "#f8f9fa",
+              borderRadius: "8px",
+              marginTop: "1rem",
+              width: "100%", // or fixed like "400px"
+              minHeight: "150px", // makes box taller
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between", // spaces out vertically
+            }}
+          >
+            <h3>Underwriter Decision</h3>
+            
+            <div
+              onChange={(e) => setDecision(e.target.value)}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "1rem", // adds consistent spacing between options
+                padding: "0.5rem 1rem",
+              }}
+            >
+              <label>
+                <input type="radio" name="decision" value="accept" /> Accept
+              </label>
 
+              <label>
+                <input type="radio" name="decision" value="reject" /> Reject
+              </label>
 
-        </div>
+              <label>
+                <input type="radio" name="decision" value="accept_high_premium" /> Accept with Higher Premium
+              </label>
+            </div>
+          </div>
           <div style={{ marginTop: "1rem" }}>
           <div style={{ fontSize: "0.95rem", marginBottom: "0.35rem" }}>
             Additional comments (optional)
@@ -407,8 +429,9 @@ const getImpactColor = (value) => {
             }}
           />
         </div>
+        </div>
         {decision && (
-          <p style={{ marginTop: "1rem" }}>
+          <p style={{ marginTop: "1rem" , color: "#175fc4ff"}}>
             <strong>Selected decision:</strong>{" "}
             {decision
               .replace(/_/g, " ")
