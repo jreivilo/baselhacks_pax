@@ -1,6 +1,28 @@
 import React, { useState } from "react";
 
-export default function CaseDecision({ onBack }) {
+// Function to check if a document is empty (missing critical fields)
+function isDocumentEmpty(doc) {
+  if (!doc) return true;
+  
+  // Check if critical fields are missing or empty
+  const requiredFields = ['age', 'sex', 'address', 'occupation'];
+  const criticalMissing = requiredFields.some(field => {
+    const value = doc[field];
+    return value === null || value === undefined || value === '' || value === 0;
+  });
+  
+  // Also check if numeric fields are invalid
+  const numericFields = ['height_cm', 'weight_kg'];
+  const numericMissing = numericFields.some(field => {
+    const value = doc[field];
+    return value === null || value === undefined || value === 0;
+  });
+  
+  return criticalMissing || numericMissing;
+}
+
+export default function CaseDecision({ data, onBack }) {
+  const isEmpty = isDocumentEmpty(data);
   const model_decision = "reject";
   const applicantData = {
     general: {
@@ -295,13 +317,41 @@ const getImpactColor = (value) => {
   </section>
       <section style={{ marginTop: "1.5rem" }}>
         <h3>Underwriter Decision</h3>
-        <div onChange={(e) => setDecision(e.target.value)}>
-          <label>
-            <input type="radio" name="decision" value="accept" /> Accept
+        {isEmpty && (
+          <div style={{ 
+            padding: "12px", 
+            backgroundColor: "#f8d7da", 
+            border: "1px solid #f5c6cb", 
+            borderRadius: "4px", 
+            marginBottom: "1rem",
+            color: "#721c24"
+          }}>
+            <strong>⚠️ Incomplete case data.</strong> Complete all required fields to enable Accept decision.
+          </div>
+        )}
+        <div onChange={(e) => {
+          const value = e.target.value;
+          // Prevent setting accept if document is empty
+          if (value === 'accept' && isEmpty) {
+            return;
+          }
+          setDecision(value);
+        }}>
+          <label style={{ opacity: isEmpty ? 0.5 : 1, cursor: isEmpty ? 'not-allowed' : 'pointer' }}>
+            <input 
+              type="radio" 
+              name="decision" 
+              value="accept" 
+              disabled={isEmpty}
+              checked={decision === 'accept' && !isEmpty}
+              style={{ cursor: isEmpty ? 'not-allowed' : 'pointer' }}
+            /> 
+            Accept
+            {isEmpty && <span style={{ fontSize: "0.85rem", color: "#721c24", marginLeft: "8px" }}>(incomplete case)</span>}
           </label>
           <br />
           <label>
-            <input type="radio" name="decision" value="reject" /> Reject
+            <input type="radio" name="decision" value="reject" checked={decision === 'reject'} /> Reject
           </label>
           <br />
           <label style={{ display: "block", marginTop: "0.75rem" }}>
@@ -339,6 +389,11 @@ const getImpactColor = (value) => {
             onClick={() => {
               if (!decision) {
                 alert("Please select a decision before submitting.");
+                return;
+              }
+              // Prevent submitting accept for empty documents
+              if (decision === 'accept' && isEmpty) {
+                alert("Cannot accept incomplete case. Please complete all required fields first.");
                 return;
               }
               const pretty = (d) => d.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

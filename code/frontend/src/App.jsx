@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react'
 import DocumentList from './components/DocumentList'
 import DocumentDetail from './components/DocumentDetail'
 import UploadModal from './components/UploadModal'
+import Models from './components/Models'
+import Analytics from './components/Analytics'
 
 const API_BASE = 'http://localhost:8000'
 
 export default function App(){
+  const [currentPage, setCurrentPage] = useState('cases') // 'cases', 'models', or 'analytics'
   const [documents, setDocuments] = useState([])
   const [selectedDocId, setSelectedDocId] = useState(null)
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -48,6 +51,26 @@ export default function App(){
           <img src="/pax-logo-hell.svg" alt="PAX Logo" className="logo" />
           <h1>Life Insurance Case Management</h1>
         </div>
+        <nav className="header-nav">
+          <button 
+            className={`nav-link ${currentPage === 'cases' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('cases')}
+          >
+            Cases
+          </button>
+          <button 
+            className={`nav-link ${currentPage === 'models' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('models')}
+          >
+            Models
+          </button>
+          <button 
+            className={`nav-link ${currentPage === 'analytics' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('analytics')}
+          >
+            Analytics
+          </button>
+        </nav>
         <div className="user-profile">
           <span className="user-icon">👤</span>
           <span className="user-greeting">Hello, Claude</span>
@@ -55,27 +78,37 @@ export default function App(){
       </header>
       
       <main className="main-container">
-        <DocumentList 
-          documents={documents} 
-          selectedId={selectedDocId}
-          onSelect={setSelectedDocId}
-          onDelete={handleDocumentDeleted}
-          loading={loading}
-        />
-        
-        <DocumentDetail 
-          documentId={selectedDocId}
-          onUpdate={loadDocuments}
-        />
+        {currentPage === 'cases' ? (
+          <>
+            <DocumentList 
+              documents={documents} 
+              selectedId={selectedDocId}
+              onSelect={setSelectedDocId}
+              onDelete={handleDocumentDeleted}
+              loading={loading}
+            />
+            
+            <DocumentDetail 
+              documentId={selectedDocId}
+              onUpdate={loadDocuments}
+            />
+          </>
+        ) : currentPage === 'models' ? (
+          <Models />
+        ) : (
+          <Analytics />
+        )}
       </main>
 
-      <button 
-        className="fab-button" 
-        onClick={() => setShowUploadModal(true)}
-        title="Upload new document"
-      >
-        +
-      </button>
+      {currentPage === 'cases' && (
+        <button 
+          className="fab-button" 
+          onClick={() => setShowUploadModal(true)}
+          title="Upload new document"
+        >
+          +
+        </button>
+      )}
 
       {showUploadModal && (
         <UploadModal 

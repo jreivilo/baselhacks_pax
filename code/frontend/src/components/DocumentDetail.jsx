@@ -5,6 +5,30 @@ import CaseDecision from './CaseDecision'
 
 const API_BASE = 'http://localhost:8000'
 
+// Function to validate a single field
+function isFieldValid(field, value) {
+  if (value === null || value === undefined) return false
+  if (typeof value === 'string' && value.trim() === '') return false
+  if (typeof value === 'number' && value === 0) return false
+  return true
+}
+
+// Function to get invalid fields
+function getInvalidFields(formData) {
+  if (!formData) return new Set()
+  
+  const requiredFields = ['age', 'sex', 'address', 'occupation', 'height_cm', 'weight_kg']
+  const invalid = new Set()
+  
+  requiredFields.forEach(field => {
+    if (!isFieldValid(field, formData[field])) {
+      invalid.add(field)
+    }
+  })
+  
+  return invalid
+}
+
 export default function DocumentDetail({ documentId, onUpdate }){
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -15,6 +39,8 @@ export default function DocumentDetail({ documentId, onUpdate }){
   const [isEditingName, setIsEditingName] = useState(false)
   const [tempName, setTempName] = useState('')
   const [toast, setToast] = useState(null)
+  const [invalidFields, setInvalidFields] = useState(new Set())
+  const [touchedFields, setTouchedFields] = useState(new Set())
 
   useEffect(() => {
     if(documentId){
@@ -32,6 +58,9 @@ export default function DocumentDetail({ documentId, onUpdate }){
       setData(docData)
       setFormData(docData)
       setTempName(docData.name || docData.filename)
+      // Validate fields on load
+      const invalid = getInvalidFields(docData)
+      setInvalidFields(invalid)
     } catch(error){
       console.error('Failed to load document:', error)
     } finally {
@@ -83,7 +112,25 @@ export default function DocumentDetail({ documentId, onUpdate }){
   }
 
   function handleChange(field, value){
-    setFormData(prev => ({ ...prev, [field]: value }))
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value }
+      // Validate field in real-time
+      const isValid = isFieldValid(field, value)
+      setInvalidFields(prevInvalid => {
+        const newInvalid = new Set(prevInvalid)
+        if (isValid) {
+          newInvalid.delete(field)
+        } else {
+          newInvalid.add(field)
+        }
+        return newInvalid
+      })
+      return updated
+    })
+  }
+
+  function handleFieldFocus(field) {
+    setTouchedFields(prev => new Set(prev).add(field))
   }
 
   function handleFieldKeyPress(e, field, value){
@@ -93,11 +140,27 @@ export default function DocumentDetail({ documentId, onUpdate }){
   }
 
   async function handleFieldBlur(field, value){
+    // Mark field as touched
+    setTouchedFields(prev => new Set(prev).add(field))
+    
     // Auto-save field on blur if changed
     const originalValue = data[field]
     
     // Skip if value hasn't changed
-    if(originalValue === value) return
+    if(originalValue === value) {
+      // Still validate even if unchanged
+      const isValid = isFieldValid(field, value)
+      setInvalidFields(prevInvalid => {
+        const newInvalid = new Set(prevInvalid)
+        if (isValid) {
+          newInvalid.delete(field)
+        } else {
+          newInvalid.add(field)
+        }
+        return newInvalid
+      })
+      return
+    }
     
     // Handle numeric fields - ensure we have valid numbers
     let finalValue = value
@@ -128,6 +191,9 @@ export default function DocumentDetail({ documentId, onUpdate }){
       
       setData(updatedData)
       setFormData(updatedData)
+      // Re-validate all fields after save
+      const invalid = getInvalidFields(updatedData)
+      setInvalidFields(invalid)
       onUpdate()
       setToast({ message: 'Changes saved', type: 'success' })
     } catch(error){
@@ -301,51 +367,69 @@ export default function DocumentDetail({ documentId, onUpdate }){
 
         <div className="data-section" style={{ flex: 1, minHeight: 0 }}>
           <div className="detail-grid">
-        <div className="detail-field">
+        <div className={`detail-field ${invalidFields.has('age') ? 'field-invalid' : ''}`}>
           <label>Age</label>
           <input 
             type="number" 
-            value={formData.age} 
-            onChange={(e) => handleChange('age', parseInt(e.target.value))} 
-            onKeyPress={(e) => handleFieldKeyPress(e, 'age', parseInt(e.target.value))}
-            onBlur={(e) => handleFieldBlur('age', parseInt(e.target.value))}
+            value={formData.age || ''} 
+            onChange={(e) => handleChange('age', parseInt(e.target.value) || 0)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'age', parseInt(e.target.value) || 0)}
+            onBlur={(e) => {
+              handleFieldFocus('age')
+              handleFieldBlur('age', parseInt(e.target.value) || 0)
+            }}
+            onFocus={() => handleFieldFocus('age')}
+            className={invalidFields.has('age') ? 'input-invalid' : ''}
           />
         </div>
 
-        <div className="detail-field">
+        <div className={`detail-field ${invalidFields.has('sex') ? 'field-invalid' : ''}`}>
           <label>Sex</label>
           <select 
-            value={formData.sex} 
+            value={formData.sex || ''} 
             onChange={(e) => {
               handleChange('sex', e.target.value)
               handleFieldBlur('sex', e.target.value)
             }}
+            onFocus={() => handleFieldFocus('sex')}
+            className={invalidFields.has('sex') ? 'input-invalid' : ''}
           >
+            <option value="">Select...</option>
             <option>Male</option>
             <option>Female</option>
             <option>Other</option>
           </select>
         </div>
 
-        <div className="detail-field full-width">
+        <div className={`detail-field full-width ${invalidFields.has('address') ? 'field-invalid' : ''}`}>
           <label>Address</label>
           <input 
             type="text" 
-            value={formData.address} 
+            value={formData.address || ''} 
             onChange={(e) => handleChange('address', e.target.value)} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'address', e.target.value)}
-            onBlur={(e) => handleFieldBlur('address', e.target.value)}
+            onBlur={(e) => {
+              handleFieldFocus('address')
+              handleFieldBlur('address', e.target.value)
+            }}
+            onFocus={() => handleFieldFocus('address')}
+            className={invalidFields.has('address') ? 'input-invalid' : ''}
           />
         </div>
 
-        <div className="detail-field">
+        <div className={`detail-field ${invalidFields.has('occupation') ? 'field-invalid' : ''}`}>
           <label>Occupation</label>
           <input 
             type="text" 
-            value={formData.occupation} 
+            value={formData.occupation || ''} 
             onChange={(e) => handleChange('occupation', e.target.value)} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'occupation', e.target.value)}
-            onBlur={(e) => handleFieldBlur('occupation', e.target.value)}
+            onBlur={(e) => {
+              handleFieldFocus('occupation')
+              handleFieldBlur('occupation', e.target.value)
+            }}
+            onFocus={() => handleFieldFocus('occupation')}
+            className={invalidFields.has('occupation') ? 'input-invalid' : ''}
           />
         </div>
 
@@ -385,25 +469,35 @@ export default function DocumentDetail({ documentId, onUpdate }){
           />
         </div>
 
-        <div className="detail-field">
+        <div className={`detail-field ${invalidFields.has('height_cm') ? 'field-invalid' : ''}`}>
           <label>Height (cm)</label>
           <input 
             type="number" 
-            value={formData.height_cm} 
-            onChange={(e) => handleChange('height_cm', parseInt(e.target.value))} 
-            onKeyPress={(e) => handleFieldKeyPress(e, 'height_cm', parseInt(e.target.value))}
-            onBlur={(e) => handleFieldBlur('height_cm', parseInt(e.target.value))}
+            value={formData.height_cm || ''} 
+            onChange={(e) => handleChange('height_cm', parseInt(e.target.value) || 0)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'height_cm', parseInt(e.target.value) || 0)}
+            onBlur={(e) => {
+              handleFieldFocus('height_cm')
+              handleFieldBlur('height_cm', parseInt(e.target.value) || 0)
+            }}
+            onFocus={() => handleFieldFocus('height_cm')}
+            className={invalidFields.has('height_cm') ? 'input-invalid' : ''}
           />
         </div>
 
-        <div className="detail-field">
+        <div className={`detail-field ${invalidFields.has('weight_kg') ? 'field-invalid' : ''}`}>
           <label>Weight (kg)</label>
           <input 
             type="number" 
-            value={formData.weight_kg} 
-            onChange={(e) => handleChange('weight_kg', parseInt(e.target.value))} 
-            onKeyPress={(e) => handleFieldKeyPress(e, 'weight_kg', parseInt(e.target.value))}
-            onBlur={(e) => handleFieldBlur('weight_kg', parseInt(e.target.value))}
+            value={formData.weight_kg || ''} 
+            onChange={(e) => handleChange('weight_kg', parseInt(e.target.value) || 0)} 
+            onKeyPress={(e) => handleFieldKeyPress(e, 'weight_kg', parseInt(e.target.value) || 0)}
+            onBlur={(e) => {
+              handleFieldFocus('weight_kg')
+              handleFieldBlur('weight_kg', parseInt(e.target.value) || 0)
+            }}
+            onFocus={() => handleFieldFocus('weight_kg')}
+            className={invalidFields.has('weight_kg') ? 'input-invalid' : ''}
           />
         </div>
 

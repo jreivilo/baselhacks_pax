@@ -1,8 +1,55 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 
 const API_BASE = 'http://localhost:8000'
 
+// Function to check if a document is empty (missing critical fields)
+function isDocumentEmpty(doc) {
+  // Check if critical fields are missing or empty
+  const requiredFields = ['age', 'sex', 'address', 'occupation'];
+  const criticalMissing = requiredFields.some(field => {
+    const value = doc[field];
+    return value === null || value === undefined || value === '' || value === 0;
+  });
+  
+  // Also check if numeric fields are invalid
+  const numericFields = ['height_cm', 'weight_kg'];
+  const numericMissing = numericFields.some(field => {
+    const value = doc[field];
+    return value === null || value === undefined || value === 0;
+  });
+  
+  return criticalMissing || numericMissing;
+}
+
 export default function DocumentList({ documents, selectedId, onSelect, loading, onDelete }){
+  const [emptyDocs, setEmptyDocs] = useState(new Set())
+
+  // Check which documents are empty
+  useEffect(() => {
+    async function checkEmptyDocuments() {
+      const emptySet = new Set()
+      
+      for (const doc of documents) {
+        try {
+          const response = await fetch(`${API_BASE}/documents/${doc.id}`)
+          if (response.ok) {
+            const fullDoc = await response.json()
+            if (isDocumentEmpty(fullDoc)) {
+              emptySet.add(doc.id)
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to check document ${doc.id}:`, error)
+        }
+      }
+      
+      setEmptyDocs(emptySet)
+    }
+    
+    if (documents.length > 0) {
+      checkEmptyDocuments()
+    }
+  }, [documents])
   
   async function handleDelete(docId, event){
     event.stopPropagation() // Prevent selecting the document
@@ -59,7 +106,7 @@ export default function DocumentList({ documents, selectedId, onSelect, loading,
       </div>
       
       <ul className="document-items">
-        {documents.map(doc => {
+        {documents.map((doc) => {
           // Format date - show only month and year
           const formatDate = (dateStr) => {
             if (!dateStr || dateStr === 'Unknown') return 'Unknown';
@@ -67,13 +114,17 @@ export default function DocumentList({ documents, selectedId, onSelect, loading,
             return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
           };
 
+          const isEmpty = emptyDocs.has(doc.id);
+
           return (
             <li 
               key={doc.id}
               className={`document-item ${selectedId === doc.id ? 'active' : ''}`}
               onClick={() => onSelect(doc.id)}
             >
-              <div className="doc-icon">📄</div>
+              <div className={`doc-icon ${isEmpty ? 'doc-icon-incomplete' : ''}`}>
+                {isEmpty ? '⚠️' : '📄'}
+              </div>
               <div className="doc-info">
                 <h3 className="doc-title">{doc.name || doc.filename}</h3>
                 <p className="doc-date">{formatDate(doc.uploaded_at)}</p>
@@ -83,7 +134,9 @@ export default function DocumentList({ documents, selectedId, onSelect, loading,
                   </span>
                 )}
                 {!doc.prediction && (
-                  <span className="doc-status status-pending">STATUS: Pending</span>
+                  <span className={`doc-status ${isEmpty ? 'status-incomplete' : 'status-pending'}`}>
+                    STATUS: {isEmpty ? 'Incomplete' : 'Pending'}
+                  </span>
                 )}
               </div>
               <button 
