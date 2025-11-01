@@ -61,8 +61,10 @@ export default function DocumentDetail({ documentId, onUpdate }){
 
   if(!documentId){
     return (
-      <div className="document-detail-empty">
-        <p>Select a document to view details</p>
+      <div className="document-detail">
+        <div className="document-detail-empty">
+          <p>Select a life insurance case to view details</p>
+        </div>
       </div>
     )
   }
@@ -78,7 +80,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
   if(!data){
     return (
       <div className="document-detail">
-        <div className="error">Failed to load document</div>
+        <div className="error">Failed to load case</div>
       </div>
     )
   }
@@ -213,7 +215,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
 
       {data.uploaded_at && (
         <div className="detail-footer">
-          <small>Document ID: {data.id}</small>
+          <small>Case ID: {data.id}</small>
         </div>
       )}
         </div>

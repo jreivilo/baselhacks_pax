@@ -56,7 +56,7 @@ export default function UploadModal({ onClose, onSuccess }){
       onSuccess()
     } catch(error){
       console.error('Upload error:', error)
-      alert('Failed to upload document. Make sure the backend is running.')
+      alert('Failed to upload case. Make sure the backend is running.')
     } finally {
       setUploading(false)
     }
@@ -76,7 +76,7 @@ export default function UploadModal({ onClose, onSuccess }){
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Upload Document</h2>
+          <h2>Upload Life Insurance Case</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 

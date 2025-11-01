@@ -6,7 +6,7 @@ export default function DocumentList({ documents, selectedId, onSelect, loading 
     return (
       <aside className="document-list">
         <div className="list-header">
-          <h2>Documents</h2>
+          <h2>Cases</h2>
         </div>
         <div className="loading">Loading...</div>
       </aside>
@@ -17,11 +17,11 @@ export default function DocumentList({ documents, selectedId, onSelect, loading 
     return (
       <aside className="document-list">
         <div className="list-header">
-          <h2>Documents</h2>
-          <p className="count">0 documents</p>
+          <h2>Cases</h2>
+          <p className="count">0 cases</p>
         </div>
         <div className="empty-state">
-          <p>No documents yet</p>
+          <p>No cases yet</p>
           <p className="hint">Click the + button to upload</p>
         </div>
       </aside>
@@ -31,8 +31,8 @@ export default function DocumentList({ documents, selectedId, onSelect, loading 
   return (
     <aside className="document-list">
       <div className="list-header">
-        <h2>Documents</h2>
-        <p className="count">{documents.length} document{documents.length !== 1 ? 's' : ''}</p>
+        <h2>Cases</h2>
+        <p className="count">{documents.length} case{documents.length !== 1 ? 's' : ''}</p>
       </div>
       
       <ul className="document-items">

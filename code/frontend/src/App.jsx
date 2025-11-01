@@ -37,7 +37,7 @@ export default function App(){
       <header className="app-header">
         <div className="header-left">
           <img src="/pax-logo-hell.svg" alt="PAX Logo" className="logo" />
-          <h1>Document Management</h1>
+          <h1>Life Insurance Case Management</h1>
         </div>
         <div className="user-profile">
           <span className="user-icon">👤</span>
