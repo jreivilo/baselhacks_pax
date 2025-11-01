@@ -2,12 +2,28 @@
   --pax-primary: #3b3a53;
   --pax-dark: #2a2938;
   --pax-accent: #ffd166;
+  --pax-green: #8ccd0e;
   --bg: #f5f5f7;
   --card: #ffffff;
   --border: rgba(59,58,83,0.15);
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+/* Toast Notifications */
+.toast{position:fixed;top:20px;right:20px;min-width:300px;max-width:500px;padding:16px 20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);display:flex;align-items:center;gap:12px;z-index:2000;animation:toast-slide-in 0.3s ease-out;backdrop-filter:blur(10px)}
+
+@keyframes toast-slide-in{
+  from{transform:translateX(400px);opacity:0}
+  to{transform:translateX(0);opacity:1}
+}
+
+.toast-success{background:linear-gradient(135deg,#8ccd0e,#7ab80c);color:white}
+.toast-error{background:linear-gradient(135deg,#dc3545,#c82333);color:white}
+.toast-info{background:linear-gradient(135deg,#3b3a53,#2a2938);color:white}
+
+.toast-icon{font-size:1.5rem;font-weight:700;min-width:24px;text-align:center}
+.toast-message{flex:1;font-weight:600;font-size:0.95rem;line-height:1.4}
 html,body,#root{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;overflow:hidden}
 
 .app-root{display:flex;flex-direction:column;height:100vh;background:var(--bg)}

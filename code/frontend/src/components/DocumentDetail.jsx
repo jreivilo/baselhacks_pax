@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import AnalysisAnimation from './AnalysisAnimation'
+import Toast from './Toast'
 
 const API_BASE = 'http://localhost:8000'
 
 export default function DocumentDetail({ documentId, onUpdate }){
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [showPdf, setShowPdf] = useState(true)
   const [isEditingName, setIsEditingName] = useState(false)
   const [tempName, setTempName] = useState('')
+  const [toast, setToast] = useState(null)
 
   useEffect(() => {
     if(documentId){
@@ -37,6 +38,11 @@ export default function DocumentDetail({ documentId, onUpdate }){
   }
 
   async function handleNameSave(){
+    if(!tempName || tempName === data.name) {
+      setIsEditingName(false)
+      return
+    }
+    
     try{
       const response = await fetch(`${API_BASE}/documents/${documentId}/name`, {
         method: 'PATCH',
@@ -50,44 +56,50 @@ export default function DocumentDetail({ documentId, onUpdate }){
       setFormData(prev => ({ ...prev, name: tempName }))
       setIsEditingName(false)
       onUpdate()
+      setToast({ message: 'Case name updated successfully', type: 'success' })
     } catch(error){
       console.error('Name update error:', error)
-      alert('Failed to update name')
+      setToast({ message: 'Failed to update case name', type: 'error' })
+      setTempName(data.name || data.filename)
+      setIsEditingName(false)
     }
   }
 
-  function handleNameCancel(){
-    setTempName(data.name || data.filename)
-    setIsEditingName(false)
+  function handleNameKeyPress(e){
+    if(e.key === 'Enter'){
+      handleNameSave()
+    } else if(e.key === 'Escape'){
+      setTempName(data.name || data.filename)
+      setIsEditingName(false)
+    }
   }
 
   function handleChange(field, value){
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  async function handleSave(){
+  async function handleFieldBlur(field, value){
+    // Auto-save field on blur if changed
+    if(data[field] === value) return
+    
+    const updatedData = { ...formData, [field]: value }
+    
     try{
       const response = await fetch(`${API_BASE}/save/${documentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(updatedData)
       })
       
       if(!response.ok) throw new Error('Save failed')
       
-      setData(formData)
-      setIsEditing(false)
+      setData(updatedData)
       onUpdate()
-      alert('Data saved successfully!')
     } catch(error){
       console.error('Save error:', error)
-      alert('Failed to save data')
+      // Revert on error
+      setFormData(data)
     }
-  }
-
-  function handleCancel(){
-    setFormData(data)
-    setIsEditing(false)
   }
 
   async function handleRunAnalysis(){
@@ -103,10 +115,31 @@ export default function DocumentDetail({ documentId, onUpdate }){
       setData(result.data)
       setFormData(result.data)
       onUpdate()
-      alert(`Analysis complete! Status: ${result.prediction}`)
+      
+	const boxStyle = {
+		display: 'inline-block',
+		padding: '3px 8px',
+		borderRadius: 6,
+		color: '#fff',
+		backgroundColor: result.prediction === 'Accepted' ? '#28a745' : '#dc3545',
+		fontWeight: 600,
+		marginLeft: 8,
+	};
+
+	const message = (
+		<span>
+			Analysis complete! Status: <span style={boxStyle}>{result.prediction}</span>
+		</span>
+	);
+      
+      // Always show green toast for successful analysis completion
+      setToast({ 
+        message, 
+        type: 'success'
+      })
     } catch(error){
       console.error('Analysis error:', error)
-      alert('Failed to run analysis')
+      setToast({ message: 'Failed to run analysis', type: 'error' })
     } finally {
       setIsAnalyzing(false)
     }
@@ -143,23 +176,20 @@ export default function DocumentDetail({ documentId, onUpdate }){
       <div className="document-detail-header">
         <div className="header-title-section">
           {isEditingName ? (
-            <div className="name-edit-container">
-              <input 
-                type="text" 
-                value={tempName} 
-                onChange={(e) => setTempName(e.target.value)}
-                className="name-edit-input"
-                autoFocus
-              />
-              <button className="btn-save-small" onClick={handleNameSave}>✓</button>
-              <button className="btn-cancel-small" onClick={handleNameCancel}>✕</button>
-            </div>
+            <input 
+              type="text" 
+              value={tempName} 
+              onChange={(e) => setTempName(e.target.value)}
+              onKeyDown={handleNameKeyPress}
+              onBlur={handleNameSave}
+              className="name-edit-input"
+              autoFocus
+            />
           ) : (
             <h2 onClick={() => setIsEditingName(true)} className="editable-title" title="Click to edit name">
               {data.name || data.filename}
             </h2>
           )}
-          <p className="document-meta">File: {data.filename} | Uploaded: {data.uploaded_at}</p>
         </div>
         <div className="document-detail-actions">
           <button 
@@ -169,23 +199,13 @@ export default function DocumentDetail({ documentId, onUpdate }){
           >
             {showPdf ? "Hide PDF" : "Show PDF"}
           </button>
-          {!isEditing ? (
-            <>
-              <button 
-                className="btn-analyze" 
-                onClick={handleRunAnalysis}
-                disabled={isAnalyzing}
-              >
-                {isAnalyzing ? '⏳ Analyzing...' : '🔍 Run Analysis'}
-              </button>
-              <button className="btn-edit" onClick={() => setIsEditing(true)}>Edit Data</button>
-            </>
-          ) : (
-            <>
-              <button className="btn-save" onClick={handleSave}>Save</button>
-              <button className="btn-cancel" onClick={handleCancel}>Cancel</button>
-            </>
-          )}
+          <button 
+            className="btn-analyze" 
+            onClick={handleRunAnalysis}
+            disabled={isAnalyzing}
+          >
+            {isAnalyzing ? '⏳ Analyzing...' : '🔍 Run Analysis'}
+          </button>
         </div>
       </div>
 
@@ -204,99 +224,111 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <div className="detail-grid">
         <div className="detail-field">
           <label>Age</label>
-          {isEditing ? (
-            <input type="number" value={formData.age} onChange={(e) => handleChange('age', parseInt(e.target.value))} />
-          ) : (
-            <span>{data.age}</span>
-          )}
+          <input 
+            type="number" 
+            value={formData.age} 
+            onChange={(e) => handleChange('age', parseInt(e.target.value))} 
+            onBlur={(e) => handleFieldBlur('age', parseInt(e.target.value))}
+          />
         </div>
 
         <div className="detail-field">
           <label>Sex</label>
-          {isEditing ? (
-            <select value={formData.sex} onChange={(e) => handleChange('sex', e.target.value)}>
-              <option>Male</option>
-              <option>Female</option>
-              <option>Other</option>
-            </select>
-          ) : (
-            <span>{data.sex}</span>
-          )}
+          <select 
+            value={formData.sex} 
+            onChange={(e) => {
+              handleChange('sex', e.target.value)
+              handleFieldBlur('sex', e.target.value)
+            }}
+          >
+            <option>Male</option>
+            <option>Female</option>
+            <option>Other</option>
+          </select>
         </div>
 
         <div className="detail-field full-width">
           <label>Address</label>
-          {isEditing ? (
-            <input type="text" value={formData.address} onChange={(e) => handleChange('address', e.target.value)} />
-          ) : (
-            <span>{data.address}</span>
-          )}
+          <input 
+            type="text" 
+            value={formData.address} 
+            onChange={(e) => handleChange('address', e.target.value)} 
+            onBlur={(e) => handleFieldBlur('address', e.target.value)}
+          />
         </div>
 
         <div className="detail-field">
           <label>Occupation</label>
-          {isEditing ? (
-            <input type="text" value={formData.occupation} onChange={(e) => handleChange('occupation', e.target.value)} />
-          ) : (
-            <span>{data.occupation}</span>
-          )}
+          <input 
+            type="text" 
+            value={formData.occupation} 
+            onChange={(e) => handleChange('occupation', e.target.value)} 
+            onBlur={(e) => handleFieldBlur('occupation', e.target.value)}
+          />
         </div>
 
         <div className="detail-field">
           <label>Smoker</label>
-          {isEditing ? (
-            <select value={formData.smoker} onChange={(e) => handleChange('smoker', e.target.value)}>
-              <option>Yes</option>
-              <option>No</option>
-            </select>
-          ) : (
-            <span>{data.smoker}</span>
-          )}
+          <select 
+            value={formData.smoker} 
+            onChange={(e) => {
+              handleChange('smoker', e.target.value)
+              handleFieldBlur('smoker', e.target.value)
+            }}
+          >
+            <option>Yes</option>
+            <option>No</option>
+          </select>
         </div>
 
         <div className="detail-field full-width">
           <label>Sports</label>
-          {isEditing ? (
-            <input type="text" value={formData.sports} onChange={(e) => handleChange('sports', e.target.value)} />
-          ) : (
-            <span>{data.sports}</span>
-          )}
+          <input 
+            type="text" 
+            value={formData.sports} 
+            onChange={(e) => handleChange('sports', e.target.value)} 
+            onBlur={(e) => handleFieldBlur('sports', e.target.value)}
+          />
         </div>
 
         <div className="detail-field full-width">
           <label>Medical Conditions</label>
-          {isEditing ? (
-            <input type="text" value={formData.medical_conditions} onChange={(e) => handleChange('medical_conditions', e.target.value)} />
-          ) : (
-            <span>{data.medical_conditions}</span>
-          )}
+          <input 
+            type="text" 
+            value={formData.medical_conditions} 
+            onChange={(e) => handleChange('medical_conditions', e.target.value)} 
+            onBlur={(e) => handleFieldBlur('medical_conditions', e.target.value)}
+          />
         </div>
 
         <div className="detail-field">
           <label>Height (cm)</label>
-          {isEditing ? (
-            <input type="number" value={formData.height_cm} onChange={(e) => handleChange('height_cm', parseInt(e.target.value))} />
-          ) : (
-            <span>{data.height_cm}</span>
-          )}
+          <input 
+            type="number" 
+            value={formData.height_cm} 
+            onChange={(e) => handleChange('height_cm', parseInt(e.target.value))} 
+            onBlur={(e) => handleFieldBlur('height_cm', parseInt(e.target.value))}
+          />
         </div>
 
         <div className="detail-field">
           <label>Weight (kg)</label>
-          {isEditing ? (
-            <input type="number" value={formData.weight_kg} onChange={(e) => handleChange('weight_kg', parseInt(e.target.value))} />
-          ) : (
-            <span>{data.weight_kg}</span>
-          )}
+          <input 
+            type="number" 
+            value={formData.weight_kg} 
+            onChange={(e) => handleChange('weight_kg', parseInt(e.target.value))} 
+            onBlur={(e) => handleFieldBlur('weight_kg', parseInt(e.target.value))}
+          />
         </div>
 
         <div className="detail-field full-width">
           <label>Annual Income</label>
-          {isEditing ? (
-            <input type="text" value={formData.annual_income} onChange={(e) => handleChange('annual_income', e.target.value)} />
-          ) : (
-            <span>{data.annual_income}</span>
-          )}
+          <input 
+            type="text" 
+            value={formData.annual_income} 
+            onChange={(e) => handleChange('annual_income', e.target.value)} 
+            onBlur={(e) => handleFieldBlur('annual_income', e.target.value)}
+          />
         </div>
       </div>
 
@@ -314,6 +346,14 @@ export default function DocumentDetail({ documentId, onUpdate }){
             <AnalysisAnimation />
           </div>
         </div>
+      )}
+
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   )

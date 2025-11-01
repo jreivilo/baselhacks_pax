@@ -226,13 +226,13 @@ async def run_analysis(doc_id: str) -> Dict[str, Any]:
         data = json.load(f)
     
     # Simulate analysis time
-    await asyncio.sleep(3)
+    await asyncio.sleep(5)
     
     # Mock prediction based on simple rules
     import random
-    
-    # Weighted random: 70% Accepted, 30% Rejected
-    prediction = "Accepted" if random.random() < 0.7 else "Rejected"
+
+    # Weighted random: 50% Accepted, 50% Rejected
+    prediction = "Accepted" if random.random() < 0.5 else "Rejected"
     
     # Update prediction
     data["prediction"] = prediction
