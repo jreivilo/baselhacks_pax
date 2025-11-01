@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import AnalysisAnimation from './AnalysisAnimation'
 import Toast from './Toast'
+import CaseDecision from './CaseDecision'
 
 const API_BASE = 'http://localhost:8000'
 
@@ -9,7 +10,8 @@ export default function DocumentDetail({ documentId, onUpdate }){
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [showPdf, setShowPdf] = useState(true)
+  const [showPdf, setShowPdf] = useState(false)
+  const [showAnalysis, setShowAnalysis] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
   const [tempName, setTempName] = useState('')
   const [toast, setToast] = useState(null)
@@ -225,14 +227,14 @@ export default function DocumentDetail({ documentId, onUpdate }){
             onClick={() => setShowPdf(!showPdf)}
             title={showPdf ? "Hide PDF" : "Show PDF"}
           >
-            {showPdf ? "Hide PDF" : "Show PDF"}
+            {showPdf ? "📄 Hide PDF" : "📄 Show PDF"}
           </button>
           <button 
-            className="btn-analyze" 
-            onClick={handleRunAnalysis}
-            disabled={isAnalyzing}
+            className="btn-toggle-analysis" 
+            onClick={() => setShowAnalysis(!showAnalysis)}
+            title={showAnalysis ? "Hide Analysis" : "Show Analysis"}
           >
-            {isAnalyzing ? '⏳ Analyzing...' : '🔍 Run Analysis'}
+            {showAnalysis ? "📊 Hide Analysis" : "📊 Show Analysis"}
           </button>
         </div>
       </div>
@@ -374,6 +376,17 @@ export default function DocumentDetail({ documentId, onUpdate }){
         </div>
       )}
         </div>
+
+        {showAnalysis && (
+          <CaseDecision 
+            documentId={documentId}
+            data={data}
+            onUpdate={setData}
+            onToast={setToast}
+            onRunAnalysis={handleRunAnalysis}
+            isAnalyzing={isAnalyzing}
+          />
+        )}
       </div>
 
       {isAnalyzing && (

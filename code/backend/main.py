@@ -3,7 +3,7 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,7 +50,7 @@ class DocumentNameUpdate(BaseModel):
     name: str
 
 class HumanPredictionUpdate(BaseModel):
-    human_prediction: str  # "Accepted" or "Rejected"
+    human_prediction: Optional[str] = None  # "Accepted", "Rejected", or None to clear
 
 @app.get("/")
 def read_root():
@@ -265,15 +265,16 @@ async def update_human_prediction(doc_id: str, update: HumanPredictionUpdate) ->
     """
     Update the human prediction/override for a document.
     Allows humans to accept or reject regardless of AI prediction.
+    Set to null to clear the human override.
     """
     data_file = DATA_DIR / f"{doc_id}.json"
     
     if not data_file.exists():
         raise HTTPException(status_code=404, detail="Document not found")
     
-    # Validate prediction value
-    if update.human_prediction not in ["Accepted", "Rejected"]:
-        raise HTTPException(status_code=400, detail="human_prediction must be 'Accepted' or 'Rejected'")
+    # Validate prediction value (allow null to clear)
+    if update.human_prediction is not None and update.human_prediction not in ["Accepted", "Rejected"]:
+        raise HTTPException(status_code=400, detail="human_prediction must be 'Accepted', 'Rejected', or null")
     
     # Load existing data
     with open(data_file) as f:
@@ -286,9 +287,11 @@ async def update_human_prediction(doc_id: str, update: HumanPredictionUpdate) ->
     with open(data_file, "w") as f:
         json.dump(data, f, indent=2)
     
+    message = f"Human prediction updated to {update.human_prediction}" if update.human_prediction else "Human override cleared"
+    
     return {
         "status": "success",
-        "message": f"Human prediction updated to {update.human_prediction}",
+        "message": message,
         "human_prediction": update.human_prediction,
         "data": data
     }
