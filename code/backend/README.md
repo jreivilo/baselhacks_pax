@@ -1,41 +1,42 @@
 # PAX Backend
 
-FastAPI backend for document processing and data extraction.
+FastAPI backend for insurance form data extraction using OpenAI and XGBoost risk modeling.
 
 ## Setup
 
+1. Install uv: https://docs.astral.sh/uv/getting-started/installation/
+
+2. Create `.env` file with your OpenAI API key:
+```
+OPENAI_API_KEY=sk-your-key-here
+```
+
+3. Install dependencies:
 ```bash
 cd code/backend
-pip install -e .
+uv sync
 ```
 
 ## Run
 
 ```bash
-python main.py
-```
-
-or
-
-```bash
 uv run uvicorn main:app --reload
 ```
 
-The API will be available at **http://localhost:8000**
+API at http://localhost:8000
+
+## Main Features
+
+- OpenAI Vision API extracts structured data from PDF insurance forms
+- XGBoost model predicts risk categories (Safe/Warning/Danger)
+- SHAP values explain model predictions with dependency plots
 
 ## API Endpoints
 
-- `GET /` - Health check
-- `POST /upload` - Upload PDF and extract data (mock 2s delay)
-- `PUT /save/{doc_id}` - Save/update document data
-- `GET /documents` - List all stored documents (summary: id, filename, uploaded_at)
-- `GET /documents/{doc_id}` - Get full document data by ID
-- `GET /pdf/{doc_id}` - Retrieve original PDF file
-
-## Data Storage
-
-- **JSON metadata**: `data/{doc_id}.json` - Extracted data (10 fields)
-- **PDF files**: `data/pdfs/{doc_id}.pdf` - Original uploaded documents
+- POST /upload - Upload PDF and get predictions
+- GET /documents - List all documents
+- GET /documents/{doc_id} - Get document details
+- GET /pdf/{doc_id} - Download PDF
 
 ## Extracted Fields
 
