@@ -23,15 +23,20 @@ function isFieldValid(field, value) {
   }
   
   // For required numeric fields, 0 is typically invalid (age, height, weight can't be 0)
-  // But allow 0 for BMI, packs_per_week, drug_frequency, sports_activity_h_per_week (these accept 0 as valid)
-  const requiredNumericFields = ['age', 'height_cm', 'weight_kg', 'earning_chf']
+  const requiredNumericFields = ['age', 'height_cm', 'weight_kg']
   if (requiredNumericFields.includes(field) && typeof value === 'number' && value === 0) {
     return false
   }
   
-  // BMI, packs_per_week, drug_frequency, and sports_activity_h_per_week accept 0 as a valid value
-  const fieldsThatAcceptZero = ['bmi', 'packs_per_week', 'drug_frequency', 'sports_activity_h_per_week']
+  // These fields accept 0 as a valid value (unemployed, no smoking, no drugs, etc.)
+  // earning_chf can be 0 (unemployed or no income) and should not make the form incomplete
+  const fieldsThatAcceptZero = ['bmi', 'packs_per_week', 'drug_frequency', 'sports_activity_h_per_week', 'earning_chf']
   if (fieldsThatAcceptZero.includes(field) && typeof value === 'number' && value === 0) {
+    return true // 0 is valid for these fields
+  }
+  
+  // For earning_chf specifically, ensure 0 is treated as valid (must check before generic return)
+  if (field === 'earning_chf' && typeof value === 'number' && value === 0) {
     return true
   }
   
@@ -98,12 +103,15 @@ export default function DocumentDetail({ documentId, onUpdate }){
   const [formData, setFormData] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [showPdf, setShowPdf] = useState(false)
-  const [showAnalysis, setShowAnalysis] = useState(false)
+  const [currentStep, setCurrentStep] = useState(1) // 1 = Application Form, 2 = Risk Analysis
   const [isEditingName, setIsEditingName] = useState(false)
   const [tempName, setTempName] = useState('')
   const [toast, setToast] = useState(null)
   const [invalidFields, setInvalidFields] = useState(new Set())
   const [touchedFields, setTouchedFields] = useState(new Set())
+  
+  // Derived state for backward compatibility
+  const showAnalysis = currentStep === 2
 
   useEffect(() => {
     if(documentId){
@@ -137,24 +145,107 @@ export default function DocumentDetail({ documentId, onUpdate }){
       }
     }
   }, [documentId])
-  
+
   useEffect(() => {
   if (formData) {
     localStorage.setItem("formSessionData", JSON.stringify(formData))
   }
   }, [formData])
 
+    useEffect(() => {
+    if (documentId) {
+      loadDocument().then(() => {
+        generateDependencyPlots();
+      });
+    } else {
+      setData(null);
+    }
+  }, [documentId]);
+
+  async function generateDependencyPlots() {
+    try {
+      const response = await fetch(`/api/dependency_plots`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      if (!response.ok) throw new Error("Failed to generate plots");
+
+      const result = await response.json();
+      console.log("Dependency plots generated:", result.dependency_plots);
+
+      // Optionally store these paths in state
+      setFormData((prev) => ({
+        ...prev,
+        dependency_plot_paths: result.dependency_plots,
+      }));
+    } catch (error) {
+      console.error("Dependency plot generation error:", error);
+    }
+  }
+
   async function loadDocument(){
     setLoading(true)
     try{
       const response = await fetch(`${API_BASE}/documents/${documentId}`)
       const docData = await response.json()
-      setData(docData)
-      setFormData(docData)
-      setTempName(docData.name || docData.filename)
+
+      //worst case fallback
+      const withDefaults = {
+
+        // === Basic Information ===
+        first_name: docData.first_name ?? "Anna",
+        last_name: docData.last_name ?? "Tester",
+        gender: docData.gender ?? "f",
+        age: docData.age ?? 26,
+        birthdate: docData.birthdate ?? "1999-06-26",
+        marital_status: docData.marital_status ?? "single",
+        address: docData.address ?? "Hauptstrasse 30",
+        occupation: docData.occupation ?? "Unemployed",
+        earning_chf: docData.earning_chf ?? 20000,
+
+        // === Physical Attributes ===
+        height_cm: docData.height_cm ?? 182,
+        weight_kg: docData.weight_kg ?? 87,
+        bmi: docData.bmi ?? ((docData.weight_kg ?? 65) / ((docData.height_cm ?? 170) / 100) ** 2),
+
+        // === Substance Use ===
+        smoking: docData.smoking ?? false,
+        packs_per_week: docData.packs_per_week ?? 0,
+        drug_use: docData.drug_use ?? false,
+        drug_frequency: docData.drug_frequency ?? 0,
+        drug_type: docData.drug_type ?? "safe",
+
+        // === Travel ===
+        staying_abroad: docData.staying_abroad ?? false,
+        abroad_type: docData.abroad_type ?? "safe",
+
+        // === Sports & Activity ===
+        sports: docData.sports ?? "None",
+        dangerous_sports: docData.dangerous_sports ?? false,
+        sport_type: docData.sport_type ?? "safe",
+        sports_activity_h_per_week: docData.sports_activity_h_per_week ?? 0,
+
+        // === Medical Information ===
+        medical_conditions: docData.medical_conditions ?? "Winterdepression, Handgebenkbruch",
+        medical_issue: docData.medical_issue ?? true,
+        medical_type: docData.medical_type ?? "safe",
+        doctor_visits: docData.doctor_visits ?? false,
+        visit_type: docData.visit_type ?? "physician",
+
+        // === Medication ===
+        regular_medication: docData.regular_medication ?? false,
+        medication_type: docData.medication_type ?? "safe",
+      };
+
+      setData(withDefaults)
+      setFormData(withDefaults)
+      setTempName(withDefaults.name || withDefaults.filename)
+
       // Validate fields on load
-      const invalid = getInvalidFields(docData)
+      const invalid = getInvalidFields(withDefaults)
       setInvalidFields(invalid)
+
       
       // Generate dependency plots after data is loaded
       // (will be triggered by the useEffect hook below)
@@ -209,10 +300,11 @@ export default function DocumentDetail({ documentId, onUpdate }){
       
       if(!response.ok) throw new Error('Name update failed')
       
-      setData(prev => ({ ...prev, name: tempName }))
-      setFormData(prev => ({ ...prev, name: tempName }))
+      setData(prev => ({ ...prev, name: tempName  , dependency_plot_paths: result.dependency_plots}))
+      setFormData(prev => ({ ...prev, name: tempName  , dependency_plot_paths: result.dependency_plots
+}))
       setIsEditingName(false)
-      onUpdate()
+      onUpdate()  
       setToast({ message: 'Case name updated successfully', type: 'success' })
     } catch(error){
       console.error('Name update error:', error)
@@ -275,6 +367,14 @@ export default function DocumentDetail({ documentId, onUpdate }){
     if(isFieldMissing(field)) return 'field-missing'
     if(isFieldUnknown(field)) return 'field-unknown'
     return ''
+  }
+
+  // Sanitize value for number/date inputs - convert "unknown" to empty string
+  function sanitizeInputValue(value) {
+    if (value === 'unknown' || value === 'Unknown' || value === 'UNKNOWN') {
+      return '';
+    }
+    return value ?? '';
   }
 
   async function handleFieldBlur(field, value){
@@ -475,14 +575,17 @@ export default function DocumentDetail({ documentId, onUpdate }){
     <div
       className="document-detail"
       style={{
-        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
         backgroundColor: '#ffffff',
         position: 'relative',
         zIndex: 10,
-        padding: '1rem'
+        padding: '1rem',
+        overflow: 'hidden'
       }}
     >
-      <div className="document-detail-header">
+      <div className="document-detail-header" style={{ flexShrink: 0 }}>
         <div className="header-title-section">
           {isEditingName ? (
             <input 
@@ -500,44 +603,249 @@ export default function DocumentDetail({ documentId, onUpdate }){
             </h2>
           )}
         </div>
-        <div className="document-detail-actions">
-          <button 
-            className="btn-toggle-pdf" 
-            onClick={() => setShowPdf(!showPdf)}
-            title={showPdf ? "Hide PDF" : "Show PDF"}
+      </div>
+
+      {/* Step Navigation Bar */}
+      <div style={{
+        backgroundColor: '#ffffff',
+        borderBottom: '2px solid #e5e7eb',
+        marginBottom: '1.5rem',
+        padding: '1rem 0',
+        flexShrink: 0
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '2rem',
+          maxWidth: '800px',
+          margin: '0 auto'
+        }}>
+          {/* Step 1: Application Form */}
+          <div 
+            onClick={() => setCurrentStep(1)}
+            onMouseEnter={(e) => {
+              if (currentStep !== 1) {
+                e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (currentStep !== 1) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              cursor: 'pointer',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '8px',
+              transition: 'all 0.2s ease',
+              backgroundColor: currentStep === 1 ? '#eff6ff' : 'transparent',
+              border: currentStep === 1 ? '2px solid #2563eb' : '2px solid transparent'
+            }}
           >
-            {showPdf ? "📄 Hide PDF" : "📄 Show PDF"}
-          </button>
-          <button 
-            className="btn-toggle-analysis" 
-            onClick={() => setShowAnalysis(!showAnalysis)}
-            title={showAnalysis ? "Hide Analysis" : "Show Analysis"}
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              backgroundColor: currentStep === 1 ? '#2563eb' : '#d1d5db',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: '0.875rem',
+              flexShrink: 0
+            }}>
+              1
+            </div>
+            <div>
+              <div style={{
+                fontSize: '0.875rem',
+                fontWeight: currentStep === 1 ? 600 : 500,
+                color: currentStep === 1 ? '#2563eb' : '#6b7280',
+                marginBottom: '0.25rem'
+              }}>
+                Application Form
+              </div>
+              <div style={{
+                fontSize: '0.75rem',
+                color: '#9ca3af'
+              }}>
+                Review and complete applicant information
+              </div>
+            </div>
+          </div>
+
+          {/* Step Connector */}
+          <div style={{
+            width: '60px',
+            height: '2px',
+            backgroundColor: currentStep >= 2 ? '#2563eb' : '#e5e7eb',
+            transition: 'background-color 0.2s ease'
+          }}></div>
+
+          {/* Step 2: Risk Analysis */}
+          <div 
+            onClick={() => setCurrentStep(2)}
+            onMouseEnter={(e) => {
+              if (currentStep !== 2) {
+                e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (currentStep !== 2) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              cursor: 'pointer',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '8px',
+              transition: 'all 0.2s ease',
+              backgroundColor: currentStep === 2 ? '#eff6ff' : 'transparent',
+              border: currentStep === 2 ? '2px solid #2563eb' : '2px solid transparent'
+            }}
           >
-            {showAnalysis ? "📊 Hide Analysis" : "📊 Show Analysis"}
-          </button>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              backgroundColor: currentStep === 2 ? '#2563eb' : '#d1d5db',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: '0.875rem',
+              flexShrink: 0
+            }}>
+              2
+            </div>
+            <div>
+              <div style={{
+                fontSize: '0.875rem',
+                fontWeight: currentStep === 2 ? 600 : 500,
+                color: currentStep === 2 ? '#2563eb' : '#6b7280',
+                marginBottom: '0.25rem'
+              }}>
+                Risk Analysis
+              </div>
+              <div style={{
+                fontSize: '0.75rem',
+                color: '#9ca3af'
+              }}>
+                AI assessment and underwriting decision
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Step 1: Application Form View - PDF Toggle Button */}
+      {currentStep === 1 && (
+        <div style={{ 
+          marginBottom: '1.5rem', 
+          marginTop: '0.5rem',
+          flexShrink: 0,
+          display: 'flex',
+          justifyContent: 'flex-end',
+          paddingRight: showPdf ? 0 : '2rem'
+        }}>
+          <button 
+            onClick={() => setShowPdf(!showPdf)}
+            style={{
+              padding: '0.625rem 1.25rem',
+              backgroundColor: showPdf ? '#ef4444' : '#2563eb',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.2s ease'
+            }}
+            title={showPdf ? "Hide PDF" : "Show PDF"}
+          >
+            <svg 
+              width="16" 
+              height="16" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+              style={{ flexShrink: 0 }}
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            {showPdf ? 'Hide PDF' : 'Show PDF'}
+          </button>
+        </div>
+      )}
 
       <div className="detail-split-view"
         style={{
           display: "flex",
           alignItems: "stretch",
           gap: "1rem",
-          minHeight: 0   // allow children with minHeight:0 to scroll properly
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',   // prevent double scroll
+          marginBottom: '1rem'
         }}
       >
-        {showPdf && !showAnalysis && (
-          <div className="pdf-viewer-container">
+        {showPdf && currentStep === 1 && (
+          <div className="pdf-viewer-container" style={{ 
+            flex: '0 0 40%',
+            maxWidth: '500px',
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            overflow: 'hidden'
+          }}>
             <iframe 
               src={`${API_BASE}/pdf/${documentId}`}
               className="pdf-viewer"
               title="Document PDF"
+              style={{
+                width: '100%',
+                height: '100%',
+                border: '2px solid #e5e7eb',
+                borderRadius: '12px',
+                background: 'white',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}
             />
           </div>
         )}
 
-        {!showAnalysis && (
-          <div className="data-section" style={{ flex: 1, minHeight: 0 }}>
+        {currentStep === 1 && (
+          <div className="data-section" style={{ 
+            flex: 1, 
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            paddingBottom: '8rem',
+            paddingLeft: showPdf ? 0 : '2rem',
+            paddingRight: showPdf ? 0 : '2rem',
+            maxWidth: showPdf ? 'none' : '1200px',
+            margin: showPdf ? 0 : '0 auto'
+          }}>
             <div className="detail-grid">
         {/* Basic Information */}
         <div className="section-header full-width">
@@ -597,7 +905,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <label>Age</label>
           <input 
             type="number" 
-            value={formData.age ?? ''} 
+            value={sanitizeInputValue(formData.age)} 
             onChange={(e) => handleChange('age', e.target.value === '' ? null : parseInt(e.target.value))} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'age', e.target.value === '' ? null : parseInt(e.target.value))}
             onBlur={(e) => {
@@ -613,7 +921,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <label>Birthdate</label>
           <input 
             type="date" 
-            value={formData.birthdate || ''} 
+            value={sanitizeInputValue(formData.birthdate)} 
             onChange={(e) => handleChange('birthdate', e.target.value)} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'birthdate', e.target.value)}
             onBlur={(e) => {
@@ -680,7 +988,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <label>Annual Earning (CHF)</label>
           <input 
             type="number" 
-            value={formData.earning_chf ?? ''} 
+            value={sanitizeInputValue(formData.earning_chf)} 
             onChange={(e) => handleChange('earning_chf', e.target.value === '' ? null : parseInt(e.target.value))} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'earning_chf', e.target.value === '' ? null : parseInt(e.target.value))}
             onBlur={(e) => {
@@ -701,7 +1009,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <input 
             type="number" 
             step="0.1"
-            value={formData.height_cm ?? ''} 
+            value={sanitizeInputValue(formData.height_cm)} 
             onChange={(e) => handleChange('height_cm', e.target.value === '' ? null : parseFloat(e.target.value))} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'height_cm', e.target.value === '' ? null : parseFloat(e.target.value))}
             onBlur={(e) => {
@@ -718,7 +1026,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <input 
             type="number" 
             step="0.1"
-            value={formData.weight_kg ?? ''} 
+            value={sanitizeInputValue(formData.weight_kg)} 
             onChange={(e) => handleChange('weight_kg', e.target.value === '' ? null : parseFloat(e.target.value))} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'weight_kg', e.target.value === '' ? null : parseFloat(e.target.value))}
             onBlur={(e) => {
@@ -735,7 +1043,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <input 
             type="number" 
             step="0.1"
-            value={formData.bmi ?? ''} 
+            value={sanitizeInputValue(formData.bmi)} 
             onChange={(e) => {
               const val = e.target.value === '' ? null : parseFloat(e.target.value)
               handleChange('bmi', val)
@@ -778,7 +1086,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <input 
             type="number" 
             step="0.1"
-            value={formData.packs_per_week ?? ''} 
+            value={sanitizeInputValue(formData.packs_per_week)} 
             onChange={(e) => handleChange('packs_per_week', e.target.value === '' ? null : parseFloat(e.target.value))} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'packs_per_week', e.target.value === '' ? null : parseFloat(e.target.value))}
             onBlur={(e) => {
@@ -812,7 +1120,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <input 
             type="number" 
             step="0.1"
-            value={formData.drug_frequency ?? ''} 
+            value={sanitizeInputValue(formData.drug_frequency)} 
             onChange={(e) => handleChange('drug_frequency', e.target.value === '' ? null : parseFloat(e.target.value))} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'drug_frequency', e.target.value === '' ? null : parseFloat(e.target.value))}
             onBlur={(e) => {
@@ -946,7 +1254,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
           <input 
             type="number" 
             step="0.1"
-            value={formData.sports_activity_h_per_week ?? ''} 
+            value={sanitizeInputValue(formData.sports_activity_h_per_week)} 
             onChange={(e) => handleChange('sports_activity_h_per_week', e.target.value === '' ? null : parseFloat(e.target.value))} 
             onKeyPress={(e) => handleFieldKeyPress(e, 'sports_activity_h_per_week', e.target.value === '' ? null : parseFloat(e.target.value))}
             onBlur={(e) => {
@@ -1096,16 +1404,32 @@ export default function DocumentDetail({ documentId, onUpdate }){
           </div>
         )}
 
-        {showAnalysis && (
-          <CaseDecision 
-            data={formData || data}
-            onBack={() => setShowAnalysis(false)}
-          />
+        {/* Step 2: Risk Analysis View */}
+        {currentStep === 2 && (
+          <div style={{ 
+            flex: 1, 
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            paddingBottom: '8rem'
+          }}>
+            <CaseDecision 
+              data={formData || data}
+              onBack={() => setCurrentStep(1)}
+            />
+          </div>
         )}
       </div>
 
       {data.uploaded_at && (
-        <div className="detail-footer">
+        <div className="detail-footer" style={{
+          flexShrink: 0,
+          paddingTop: '1rem',
+          paddingBottom: '1rem',
+          borderTop: '1px solid #e5e7eb',
+          marginTop: '1rem',
+          marginBottom: '0'
+        }}>
           <small>Case ID: {data.id}</small>
         </div>
       )}

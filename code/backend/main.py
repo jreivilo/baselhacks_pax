@@ -6,7 +6,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-
+import joblib
 from openai import AsyncOpenAI
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,17 +14,29 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import io
-import numpy as np
-import pandas as pd
-import joblib
+from fastapi.staticfiles import StaticFiles
 import xgboost as xgb
+import numpy as np
 import shap
+
+import pandas as pd
+# import dependency_plots module safely and attach its router if available
+dep_router = None
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import sys
 try:
-    from PIL import Image
-    HAS_PIL = True
-except ImportError:
-    HAS_PIL = False
+    import api.dependency_plots as dependency_plots_mod
+    # prefer an exported 'router' object
+    dep_router = getattr(dependency_plots_mod, "router", None)
+    # some implementations may export a sub-object named dependency_plots with a router
+    if dep_router is None and hasattr(dependency_plots_mod, "dependency_plots"):
+        dep_router = getattr(dependency_plots_mod.dependency_plots, "router", None)
+except Exception as e:
+    dep_router = None
+    print("Warning: failed to import api.dependency_plots:", e)
 
 # Compatibility shim for older sklearn pickle files
 # This handles the case where pickle files were created with older sklearn versions
@@ -62,11 +74,75 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Initialize OpenAI client
 if OPENAI_API_KEY:
     client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+else:
+    client = None
 
 # Import dependency plots router (before app creation to avoid circular imports)
 from api.dependency_plots import router as dependency_plots_router
 
 app = FastAPI(title="PAX Document Processing API")
+async def generate_model_explanation(decision: str, explanation: Dict[str, Any]) -> Optional[str]:
+    """
+    Use OpenAI to generate a one-sentence human-readable explanation
+    of the model's decision using SHAP feature impacts.
+    """
+    if not client:
+        return None
+
+    try:
+        top_features = explanation.get("top_features", [])
+        grouped_impacts = explanation.get("grouped_impacts", [])
+        target_class = explanation.get("target_class", decision)
+
+        # Compact summaries for the prompt
+        top_summary = ", ".join(
+            [f"{f['feature']} ({f['impact']:+.2f})" for f in top_features[:5]]
+        )
+        grouped_summary = ", ".join(
+            [f"{g['category']}: {g['impact']:+.2f}" for g in grouped_impacts[:5]]
+        )
+
+        prompt = f"""The AI insurance risk model predicted "{target_class}" for this applicant.
+
+Top SHAP feature contributions: {top_summary}
+
+Grouped impacts by category: {grouped_summary}
+
+Write one clear, professional sentence describing the model's reasoning for this decision. Focus on the key risk factors that influenced the outcome. For example: "Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk." """
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert insurance underwriter explaining AI model predictions in clear, professional language."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.4,
+            max_tokens=150
+        )
+
+        if response.choices and len(response.choices) > 0:
+            content = response.choices[0].message.content
+            if content:
+                return content.strip()
+        
+        return None
+
+    except Exception as e:
+        print("⚠️ OpenAI model explanation failed:", e)
+        import traceback
+        traceback.print_exc()
+        return None
+
+# serve generated dependency plots from backend/static/dependency_plots
+static_dir = Path(__file__).resolve().parents[0] / "static" / "dependency_plots"
+static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/dependency_plots", StaticFiles(directory=str(static_dir)), name="dependency_plots")
+
+# include router if available
+if dep_router:
+    app.include_router(dep_router)
+else:
+    print("api.dependency_plots router not available; skipping include_router")
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -77,11 +153,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for dependency plots
+# Mount static files for dependency plots and SHAP waterfalls
 STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 static_dir = STATIC_DIR / "dependency_plots"
 static_dir.mkdir(parents=True, exist_ok=True)
+WATERFALLS_DIR = STATIC_DIR / "waterfalls"
+WATERFALLS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Include dependency plots router FIRST (before GET route to avoid conflicts)
 # Note: Vite proxy strips /api prefix, so router should not have /api prefix
@@ -98,6 +176,18 @@ async def get_dependency_plot(filename: str):
         raise HTTPException(status_code=404, detail="Plot not found")
     return FileResponse(
         plot_file,
+        media_type="image/png",
+        headers={"Content-Disposition": "inline"}
+    )
+
+@app.get("/waterfalls/{filename}")
+async def get_waterfall_plot(filename: str):
+    """Serve SHAP waterfall plot images."""
+    img_file = WATERFALLS_DIR / filename
+    if not img_file.exists():
+        raise HTTPException(status_code=404, detail="Waterfall image not found")
+    return FileResponse(
+        img_file,
         media_type="image/png",
         headers={"Content-Disposition": "inline"}
     )
@@ -147,15 +237,11 @@ def load_model_artifacts() -> None:
             PREPROCESSOR = joblib.load(pre_path)
             print("Loaded preprocessor")
         except AttributeError as e:
-            if '_RemainderColsList' in str(e):
+            if "_RemainderColsList" in str(e):
                 # Ensure compatibility shim is set up and try again
                 _setup_sklearn_compatibility()
-                try:
-                    PREPROCESSOR = joblib.load(pre_path)
-                    print("Loaded preprocessor (with compatibility mode)")
-                except Exception as e2:
-                    print(f"Error loading preprocessor even with compatibility shim: {e2}")
-                    raise
+                PREPROCESSOR = joblib.load(pre_path)
+                print("Loaded preprocessor (with compatibility mode)")
             else:
                 raise
     if le_path.exists():
@@ -219,6 +305,7 @@ async def process_pdf_with_workflow(pdf_content: bytes) -> Dict[str, Any]:
             "abroad_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
             "dangerous_sports": random.choice([True, False]),
             "sport_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
+            "medical_conditions": random.choice(["Asthma", "Diabetes", "Herzkrankheit"]),
             "medical_issue": random.choice([True, False]),
             "medical_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
             "doctor_visits": random.choice([True, False]),
@@ -255,6 +342,9 @@ async def process_pdf_with_workflow(pdf_content: bytes) -> Dict[str, Any]:
 class DocumentData(BaseModel):
     id: str
     filename: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    medical_conditions: Optional[str] = None
     name: Optional[str] = None  # Display name for the document/case
     gender: Optional[str] = None  # "m", "f", "other"
     age: Optional[int] = None
@@ -452,7 +542,7 @@ async def upload_document(files: List[UploadFile] = File(...)) -> Dict[str, Any]
             if 'first_name' in workflow_result:
                 extracted_data['first_name'] = workflow_result.get('first_name')
             
-            for key in ['gender', 'age', 'birthdate', 'marital_status', 'height_cm', 'weight_kg', 
+            for key in ['first_name', 'last_name', 'medical_conditions','gender', 'age', 'birthdate', 'marital_status', 'height_cm', 'weight_kg',
                        'bmi', 'smoking', 'packs_per_week', 'drug_use', 'drug_frequency', 'drug_type',
                        'staying_abroad', 'abroad_type', 'dangerous_sports', 'sport_type', 
                        'medical_issue', 'medical_type', 'doctor_visits', 'visit_type', 
@@ -741,7 +831,7 @@ def _group_shap_contributions(contrib: np.ndarray) -> Dict[str, Any]:
 
 
 @app.post("/predict", response_model=PredictResponse)
-def predict(req: PredictRequest) -> PredictResponse:
+async def predict(req: PredictRequest) -> PredictResponse:
     # Lazy-load once if not yet loaded (e.g., server started before artifacts were written)
     global PREPROCESSOR, LABEL_ENCODER, BOOSTER, FEATURE_META
     if PREPROCESSOR is None or LABEL_ENCODER is None or BOOSTER is None or not FEATURE_META:
@@ -801,19 +891,57 @@ def predict(req: PredictRequest) -> PredictResponse:
                 contrib = np.array(values).reshape(-1)
 
             groups = _group_shap_contributions(contrib)
+            # Try to generate a SHAP waterfall image for the predicted class
+            waterfall_url = None
+            try:
+                feature_names: List[str] = FEATURE_META.get("all_feature_names_after_pre", [])
+                exp = shap.Explanation(values=contrib, base_values=base_value, feature_names=feature_names)
+                fig = plt.figure(figsize=(8, 6))
+                shap.plots.waterfall(exp, max_display=15, show=False)
+                fname = f"{uuid.uuid4().hex}.png"
+                fpath = WATERFALLS_DIR / fname
+                plt.tight_layout()
+                fig.savefig(fpath, dpi=150, bbox_inches="tight")
+                plt.close(fig)
+                waterfall_url = f"/waterfalls/{fname}"
+            except Exception:
+                waterfall_url = None
+
             explanation = {
                 "target_class": decision,
                 "base_value": base_value,
+                "waterfall_url": waterfall_url,
                 **groups,
             }
+            model_explanation = None
+            if explanation and OPENAI_API_KEY:
+                try:
+                    model_explanation = await generate_model_explanation(decision, explanation)
+                    if not model_explanation:
+                        print("⚠️ Model explanation generation returned None - check OpenAI API key and connection")
+                except Exception as e:
+                    print("⚠️ Model explanation generation failed:", e)
+                    import traceback
+                    traceback.print_exc()
+                    model_explanation = None
         except Exception as e:
             # Provide graceful degradation if SHAP fails
             explanation = {"error": f"SHAP explanation failed: {e}"}
 
+    if model_explanation:
+        print(f"✅ Decision: {decision}, Model explanation generated successfully")
+    elif OPENAI_API_KEY:
+        print(f"⚠️ Decision: {decision}, Model explanation generation failed (check API key or OpenAI service)")
+    else:
+        print(f"ℹ️ Decision: {decision}, Model explanation skipped (OPENAI_API_KEY not configured)")
+    
     return PredictResponse(
         decision=decision,
         probabilities=prob_map,
         score=score,
         model_version=MANIFEST.get("created_at"),
-        explanation=explanation,
+        explanation={
+            **(explanation or {}),
+            "model_explanation": model_explanation,
+        } if explanation else None,
     )

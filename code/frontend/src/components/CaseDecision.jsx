@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import AnalysisAnimation from "./AnalysisAnimation";
+import SuccessConfetti from "./SuccessConfetti";
 
 const API_BASE = '/api'
 
@@ -48,6 +50,35 @@ function normalizeGender(val) {
   return undefined;
 }
 
+// Normalize model decision to either "accept" or "reject" for display/comparison purposes
+// Handles: "accept", "accept_with_premium", "needs_more_info", "reject", etc.
+// Both "accept" and "accept_with_premium" → "accept"
+// Both "reject" and "needs_more_info" → "reject"
+function normalizeDecision(decision) {
+  if (!decision) return null;
+  const s = String(decision).toLowerCase();
+  // If decision contains "accept" (e.g., "accept", "accept_with_premium"), treat as accept
+  if (s.includes('accept')) return 'accept';
+  // "needs_more_info" and "reject" are both treated as reject
+  if (s.includes('needs_more_info') || s.includes('more_info') || s === 'reject') return 'reject';
+  // Default to reject for any other unknown values
+  return 'reject';
+}
+
+// Check if a decision is an accept (for display purposes)
+function isAcceptDecision(decision) {
+  if (!decision) return false;
+  const normalized = normalizeDecision(decision);
+  return normalized === 'accept';
+}
+
+// Get display text for decision - shows "ACCEPT" or "REJECT" regardless of variant
+function getDecisionDisplayText(decision) {
+  if (!decision) return "Pending Assessment";
+  const normalized = normalizeDecision(decision);
+  return normalized === 'accept' ? 'ACCEPT' : 'REJECT';
+}
+
 async function callPredictAPI(payload) {
   const res = await fetch(`${API_BASE}/predict`, {
     method: 'POST',
@@ -67,9 +98,25 @@ function buildPayload(applicantData, data) {
   const age = parseNumber(getCategoryAnswer(applicantData, 'Age'));
   const birthdate = data?.birthdate || applicantData?.general?.birthdate || undefined;
   const marital_status = String(getCategoryAnswer(applicantData, 'Marital Status') || '').toLowerCase() || undefined;
-  const height_cm = parseNumber(getCategoryAnswer(applicantData, 'Height (cm)'));
-  const weight_kg = parseNumber(getCategoryAnswer(applicantData, 'Weight (kg)'));
-  const bmi = parseNumber(getCategoryAnswer(applicantData, 'BMI'));
+  // Height and Weight are in the BMI category, so we need to find them by question text
+  const height_cm = parseNumber(getCategoryAnswer(applicantData, 'BMI', (item) => item.question === 'Height (cm)')) || parseNumber(data?.height_cm);
+  const weight_kg = parseNumber(getCategoryAnswer(applicantData, 'BMI', (item) => item.question === 'Weight (kg)')) || parseNumber(data?.weight_kg);
+  // BMI is in the BMI category as a question
+  let bmi = parseNumber(getCategoryAnswer(applicantData, 'BMI', (item) => item.question === 'BMI')) || parseNumber(data?.bmi);
+  
+  // Validate BMI - typically ranges from 10-70 (170 would be impossible)
+  // If BMI seems like it might be weight in kg (e.g., > 100), calculate it from height/weight instead
+  if (bmi != null && height_cm != null && weight_kg != null && !isNaN(height_cm) && !isNaN(weight_kg) && height_cm > 0) {
+    // If BMI is suspiciously high (>100), it might be weight - recalculate from height/weight
+    if (bmi > 100) {
+      console.warn(`BMI value ${bmi} seems unrealistic. Recalculating from height (${height_cm}cm) and weight (${weight_kg}kg)`);
+      bmi = weight_kg / Math.pow(height_cm / 100, 2);
+    }
+    // If provided BMI seems reasonable but we can verify, log it
+    else if (bmi > 70) {
+      console.warn(`BMI value ${bmi} is extremely high (>70). This will likely result in rejection.`);
+    }
+  }
   const smoking = parseYesNo(getCategoryAnswer(applicantData, 'Smoking'));
   const packs_per_week = parseNumber(getCategoryAnswer(applicantData, 'Packs per Week'));
   const drug_use = parseYesNo(getCategoryAnswer(applicantData, 'Drug Use'));
@@ -87,7 +134,10 @@ function buildPayload(applicantData, data) {
   const medication_type = findRiskKeyword(getCategoryAnswer(applicantData, 'Medication Type')) || 'safe';
   const sports_activity_h_per_week = parseNumber(getCategoryAnswer(applicantData, 'Sports Activity (hours/week)'));
   const earning_chf = parseNumber(getCategoryAnswer(applicantData, 'Earning (CHF)'));
-
+    // const [modelExplanation, setModelExplanation] = useState(
+    //     data?.model_explanation ||
+    //     `Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk.`
+    // );
   return {
     gender, age, marital_status,
     height_cm, weight_kg, bmi,
@@ -104,18 +154,77 @@ function buildPayload(applicantData, data) {
   };
 }
 
-async function handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts, data }) {
+
+async function handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts, setModelExplanation,data
+}) {
+
   try {
     setError("");
     setLoading(true);
+    
+    // Add minimum delay to ensure animation is visible (3 seconds minimum)
+    const startTime = Date.now();
+    const minDuration = 3000;
+    
     const payload = buildPayload(applicantData, data);
     const result = await callPredictAPI(payload);
-    setDecision(result.decision || "");
+    
+    // Ensure minimum animation duration
+    const elapsed = Date.now() - startTime;
+    if (elapsed < minDuration) {
+      await new Promise(resolve => setTimeout(resolve, minDuration - elapsed));
+    }
+    
+    // Normalize the model decision to "accept" or "reject" for the underwriter decision
+    // Both "accept"/"accept_with_premium" → "accept"
+    // Both "reject"/"needs_more_info" → "reject"
+    const normalizedModelDecision = normalizeDecision(result.decision);
+    console.log("Model decision:", result.decision, "→ Normalized:", normalizedModelDecision);
+    // Only set the underwriter decision if:
+    // 1. User hasn't already made a decision, AND
+    // 2. The normalized decision is a clear "accept" or "reject"
+    setDecision(prevDecision => {
+      if (prevDecision) {
+        // User has already made a decision, don't override it
+        return prevDecision;
+      }
+      // Auto-populate with normalized decision (accept or reject)
+      const newDecision = normalizedModelDecision || "";
+      console.log("Setting decision:", newDecision, "(model was:", result.decision, ")");
+      return newDecision;
+    });
     setLastResult(result);
+    console.log(result.explanation);
+    if (result.explanation?.model_explanation) {
+          setModelExplanation(result.explanation.model_explanation);
+    }
     // Update SHAP impacts mapping for the category bars
     const grouped = result?.explanation?.grouped_impacts || [];
     const mapping = grouped.reduce((acc, g) => { acc[g.category] = Number(g.impact || 0); return acc; }, {});
     updateShapImpacts(mapping);
+    
+    // Get the updated model explanation
+    const updatedExplanation = result.explanation?.model_explanation || applicantData.modelExplanation;
+    
+    // Save prediction results to backend for persistence
+    if (data?.id) {
+      try {
+        const savePayload = {
+          ...data,
+          model_prediction_data: result,
+          model_explanation: updatedExplanation,
+          shap_impacts: mapping,
+          model_prediction: result.decision
+        };
+        await fetch(`${API_BASE}/save/${data.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(savePayload)
+        });
+      } catch (saveError) {
+        console.error('Failed to save prediction data:', saveError);
+      }
+    }
   } catch (e) {
     console.error(e);
     setError(String(e?.message || e));
@@ -125,10 +234,11 @@ async function handleRunCalculationInner({ applicantData, setLoading, setError, 
 }
 export default function CaseDecision({ data, onBack }) {
   const plotPaths = data.dependency_plot_paths || {};
-  const model_decision = "reject";
+  // Note: modelDecision will be defined after lastResult is set
+
  const applicantData = {
     general: {
-      name: data?.name || "Applicant",
+      name: (`${data?.first_name ?? ''} ${data?.last_name ?? ''}`.trim()) || "Applicant",
       birthdate: data?.birthdate || "Not provided",
       address: data?.address || "—"
     },
@@ -137,7 +247,9 @@ export default function CaseDecision({ data, onBack }) {
         { question: "What is your gender?", answer: data?.gender }
       ],
       "Age": [
-        { question: "What is your current age?", answer: data?.age }
+
+        { question: "What is your current age?", answer: data?.age },
+
       ],
       "Marital Status": [
         { question: "What is your marital status?", answer: data?.marital_status }
@@ -178,47 +290,23 @@ export default function CaseDecision({ data, onBack }) {
   };
 
   const [expandedCategory, setExpandedCategory] = useState(null);
-  const [decision, setDecision] = useState("");
+  const [decision, setDecision] = useState(data?.human_prediction ? (data.human_prediction === "Accepted" ? "accept" : "reject") : "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [lastResult, setLastResult] = useState(null);
-
+  const [lastResult, setLastResult] = useState(data?.model_prediction_data || null);
+  const [modelExplanation, setModelExplanation] = useState(
+        data?.model_explanation || applicantData.modelExplanation
+    );
+  const [showSuccessConfetti, setShowSuccessConfetti] = useState(false);
   const toggleExpand = (cat) =>
     setExpandedCategory(expandedCategory === cat ? null : cat);
 
-  // Persisted SHAP-like impact values (stable across re-renders and page reloads)
-  const SHAP_STORAGE_KEY = "shapImpacts_v1";
-  const [shapImpacts, setShapImpacts] = useState(() => {
-    try {
-      const raw = localStorage.getItem(SHAP_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const categoryKeys = Object.keys(applicantData.categories);
-        const hasAll = categoryKeys.every((k) => typeof parsed[k] !== "undefined");
-        if (hasAll) return parsed;
-      }
-    } catch (e) {
-      // ignore and regenerate on error
-    }
-
-    const generated = Object.keys(applicantData.categories).reduce((acc, key) => {
-      acc[key] = parseFloat((Math.random() * 2 - 1).toFixed(2)); // -1 to 1 numeric
-      return acc;
-    }, {});
-
-    try { localStorage.setItem(SHAP_STORAGE_KEY, JSON.stringify(generated)); } catch {}
-
-    return generated;
-  });
+  // SHAP impacts - load from stored data if available
+  const [shapImpacts, setShapImpacts] = useState(data?.shap_impacts || {});
 
   const updateShapImpacts = (newMap) => {
-    try {
-      const merged = { ...shapImpacts, ...newMap };
-      localStorage.setItem(SHAP_STORAGE_KEY, JSON.stringify(merged));
-      setShapImpacts(merged);
-    } catch {
-      setShapImpacts({ ...shapImpacts, ...newMap });
-    }
+    // Merge backend-provided values; no localStorage or placeholders.
+    setShapImpacts((prev) => ({ ...prev, ...newMap }));
   };
 
 const getImpactColor = (value) => {
@@ -262,417 +350,921 @@ const getImpactColor = (value) => {
         zIndex: 10
       }}
     >
-      {/* Action button above the page title */}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginBottom: "0.75rem", alignItems: "center" }}>
-        {decision && (
-          <span style={{
-            padding: "6px 10px",
-            borderRadius: 8,
-            background: "#f0f3ff",
-            color: "#2c3e50",
-            fontWeight: 700,
-            border: "1px solid #dce3ff"
-          }}>
-            Decision: {String(decision)} {lastResult?.score != null ? `(${(lastResult.score*100).toFixed(1)}%)` : ""}
-          </span>
-        )}
-        <button
-          className="btn-run-analysis"
-          style={{ width: "auto" }}
-          type="button"
-          disabled={loading}
-          onClick={() => handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts, data })}
-        >
-          {loading ? "Calculating..." : "Run Calculation"}
-        </button>
+      {/* Report Header */}
+      <div style={{ 
+        marginBottom: "3rem",
+        paddingBottom: "2rem",
+        borderBottom: "2px solid #e5e7eb"
+      }}>
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          alignItems: "flex-start",
+          marginBottom: "2rem"
+        }}>
+          <div style={{ flex: 1 }}>
+            <h1 style={{ 
+              margin: "0 0 0.5rem 0",
+              fontSize: "1.875rem",
+              fontWeight: 700,
+              color: "#111827",
+              letterSpacing: "-0.025em"
+            }}>
+              Underwriting Risk Assessment Report
+            </h1>
+            <div style={{ 
+              fontSize: "0.875rem",
+              color: "#6b7280",
+              lineHeight: "1.75"
+            }}>
+              <div><strong>Case Reference:</strong> {data?.id || "N/A"}</div>
+              <div><strong>Report Date:</strong> {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+              {applicantData.general.name && (
+                <div><strong>Applicant:</strong> {applicantData.general.name}</div>
+              )}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "0.75rem", flexShrink: 0 }}>
+            <button
+              onClick={onBack}
+              style={{
+                padding: "0.625rem 1.25rem",
+                backgroundColor: "#6b7280",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.875rem",
+                fontWeight: 500
+              }}
+            >
+              Back to Application
+            </button>
+            <button
+              className="btn-run-analysis"
+              style={{ 
+                padding: "0.625rem 1.5rem",
+                backgroundColor: "#2563eb",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: loading ? "not-allowed" : "pointer",
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                opacity: loading ? 0.7 : 1,
+                boxShadow: loading ? "none" : "0 1px 2px rgba(0,0,0,0.1)"
+              }}
+              type="button"
+              disabled={loading}
+              onClick={() => handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts,setModelExplanation ,data})}
+            >
+              {loading ? "Processing..." : "Generate Risk Assessment"}
+            </button>
+          </div>
+        </div>
       </div>
-      <h1>Life Insurance Analysis</h1>
 
-      {/* Back Button */}
-      <button
-        onClick={onBack}
-        style={{
-          marginBottom: "1rem",
-          padding: "0.5rem 1rem",
-          backgroundColor: "#6c757d",
-          color: "white",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer"
-        }}
-      >
-        ← Back to Form
-      </button>
-
-      {/* General info */}
+      {/* 1. Executive Summary & AI Risk Assessment */}
       <section
         style={{
-          backgroundColor: "#f8f9fa",
-          padding: "1rem",
-          borderRadius: "8px",
-          marginBottom: "1rem"
+          backgroundColor: "#ffffff",
+          padding: "2.5rem",
+          marginBottom: "2.5rem",
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
         }}
       >
-        <h2>General Details</h2>
-        <p><strong>Name:</strong> {applicantData.general.name}</p>
-        <p><strong>Date of Birth:</strong> {applicantData.general.birthdate}</p>
-        <p><strong>Address:</strong> {applicantData.general.address}</p>
-      </section>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          marginBottom: "2rem",
+          paddingBottom: "1rem",
+          borderBottom: "2px solid #e5e7eb"
+        }}>
+          <div style={{
+            width: "32px",
+            height: "32px",
+            borderRadius: "50%",
+            backgroundColor: "#2563eb",
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: 700,
+            fontSize: "0.875rem",
+            marginRight: "1rem"
+          }}>
+            1
+          </div>
+          <h2 style={{ 
+            margin: 0, 
+            fontSize: "1.5rem", 
+            fontWeight: 700,
+            color: "#111827"
+          }}>
+            Executive Summary & AI Risk Assessment
+          </h2>
+        </div>
 
-      {/* Risk factor section with per-category SHAP mock */}
-      <section>
-        <h2>Risk Factor Details</h2>
-        {Object.entries(applicantData.categories).map(([category, qaList]) => {
-          const shapValue = shapImpacts[category];
-          const color = getImpactColor(shapValue); // <-- add this
-            return (
-            <div key={category} style={{ marginBottom: "1rem" }}>
-              <button
-              onClick={() => toggleExpand(category)}
-              style={{
-                width: "100%",
+        {/* Applicant Information */}
+        <div style={{
+          marginBottom: "2.5rem"
+        }}>
+          <h3 style={{
+            margin: "0 0 1rem 0",
+            fontSize: "0.8125rem",
+            fontWeight: 600,
+            color: "#6b7280",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em"
+          }}>
+            Applicant Information
+          </h3>
+          <div style={{ 
+            fontSize: "0.9375rem", 
+            color: "#374151", 
+            lineHeight: "2",
+            fontFamily: "ui-monospace, monospace"
+          }}>
+            <div><strong style={{ color: "#111827" }}>Name:</strong> {applicantData.general.name}</div>
+            <div><strong style={{ color: "#111827" }}>Date of Birth:</strong> {applicantData.general.birthdate}</div>
+            <div><strong style={{ color: "#111827" }}>Address:</strong> {applicantData.general.address}</div>
+          </div>
+        </div>
+
+        {/* AI Risk Assessment */}
+        {lastResult && (
+          <div style={{
+            marginBottom: "2.5rem"
+          }}>
+            <h3 style={{
+              margin: "0 0 1.5rem 0",
+              fontSize: "0.9375rem",
+              fontWeight: 600,
+              color: "#374151",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em"
+            }}>
+              AI Risk Assessment
+            </h3>
+            
+            {/* Recommendation */}
+            <div style={{
+              marginBottom: "2rem",
+              padding: "2rem",
+              backgroundColor: isAcceptDecision(lastResult.decision) 
+                ? "#ecfdf5" 
+                : "#fef2f2",
+              borderRadius: "8px",
+              border: `2px solid ${
+                isAcceptDecision(lastResult.decision) 
+                  ? "#10b981" 
+                  : "#ef4444"
+              }`
+            }}>
+              <div style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                backgroundColor: "#dedfdeff",
-                color: "black",
-                border: "none",
-                padding: "0.75rem 1rem",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "1rem"
-              }}
-              >
-              {/* Category Title */}
-              <span style={{ flex: "1", textAlign: "left" }}>
-                {category} {expandedCategory === category ? "▲" : "▼"}
-              </span>
-
-              {/* Mock SHAP mini-plot */}
-              <div
-                style={{
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                }}
-              >
-                <div
-                style={{
-                  position: "relative",
-                  height: "18px",
-                  width: getBarWidth(shapValue),
-                  backgroundColor: color,
-                  clipPath:
-                  shapValue > 0
-                    ? "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%)"
-                    : "polygon(10% 0%, 100% 0%, 100% 100%, 10% 100%, 0% 50%)",
-                  borderRadius: "3px",
-                  transition: "width 0.3s ease",
-                }}
-                ></div>
-                <span style={{ fontSize: "0.8rem", color: "#4c4848ff" }}>
-                {shapValue > 0 ? "+" : ""}
-                {shapValue}
-                </span>
-              </div>
-              </button>
-
-              {/* Expanded Q&A with dependency image on the right */}
-              {expandedCategory === category && (
-              <div
-                style={{
-                backgroundColor: "#f1f1f1",
-                padding: "1rem",
-                borderRadius: "4px",
-                marginTop: "0.5rem",
-                }}
-              >
-                {(() => {
-                // Map category names to plot path keys
-                const plotKeyMap = {
-                  "Age": "age",
-                  "BMI": "bmi",
-                  "Smoking": "smoking",
-                  "Drug Use": "drug_frequency",
-                  "Sports": "sport_hours"
-                };
-                const plotKey = plotKeyMap[category];
-                const depPath = plotPaths?.[plotKey];
-
-                // show all QA items
-                const qaItems = qaList.filter((q) => !q.dependency);
-
-                return (
-                  <div
-                  style={{
-                    display: "flex",
-                    gap: "1rem",
-                    alignItems: "flex-start",
-                    flexWrap: "wrap",
-                  }}
-                  >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {qaItems.map((item, index) => (
-                    <p key={index} style={{ marginBottom: "0.75rem" }}>
-                      <strong>{item.question}</strong>
-                      <br />
-                      Answer: {String(item.answer ?? '—')}
-                    </p>
-                    ))}
+                flexWrap: "wrap",
+                gap: "2rem"
+              }}>
+                <div>
+                  <div style={{
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#6b7280",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    marginBottom: "0.75rem"
+                  }}>
+                    Recommendation
                   </div>
-
-                  {depPath && (
-                    <div
-                    style={{
-                      flex: "0 0 320px",
-                      maxWidth: "40%",
-                      textAlign: "center",
-                      alignSelf: "flex-start",
-                    }}
-                    >
-                    <img
-                        src={depPath.startsWith('/api') ? depPath : `${API_BASE}${depPath}`}
-                        alt={`${category} dependency plot`}
-                        style={{
-                          width: "100%",
-                          height: "auto",
-                          borderRadius: "4px",
-                          boxSizing: "border-box"
-                        }}
-                      />
+                  <div style={{
+                    fontSize: "1.75rem",
+                    fontWeight: 700,
+                    color: isAcceptDecision(lastResult.decision) 
+                      ? "#059669" 
+                      : "#dc2626",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em"
+                  }}>
+                    {getDecisionDisplayText(lastResult.decision)}
+                  </div>
+                </div>
+                {lastResult?.score != null && (
+                  <div>
+                    <div style={{
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      color: "#6b7280",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      marginBottom: "0.75rem"
+                    }}>
+                      Confidence Level
                     </div>
-                  )}
+                    <div style={{
+                      fontSize: "1.5rem",
+                      fontWeight: 700,
+                      color: "#111827"
+                    }}>
+                      {(lastResult.score * 100).toFixed(1)}%
+                    </div>
                   </div>
-                );
-                })()}
+                )}
               </div>
-              )}
             </div>
-            );
-        })}
+            
+            {/* Assessment Rationale */}
+            {modelExplanation && (
+              <div>
+                <h3 style={{ 
+                  margin: "0 0 1rem 0", 
+                  fontSize: "1rem",
+                  fontWeight: 600,
+                  color: "#374151",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em"
+                }}>
+                  Assessment Rationale
+                </h3>
+                <div style={{
+                  padding: "1.5rem",
+                  backgroundColor: "#f9fafb",
+                  borderRadius: "6px",
+                  border: "1px solid #e5e7eb"
+                }}>
+                  <p style={{ 
+                    margin: 0, 
+                    lineHeight: "1.75", 
+                    color: "#374151",
+                    fontSize: "0.9375rem"
+                  }}>
+                    {modelExplanation}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Recommendation Discrepancy Notice */}
+        {lastResult?.decision && decision && normalizeDecision(lastResult.decision) !== normalizeDecision(decision) && (
+          <div style={{
+            marginTop: "1.5rem",
+            padding: "1.25rem",
+            backgroundColor: "#fffbeb",
+            borderLeft: "4px solid #f59e0b",
+            borderRadius: "6px"
+          }}>
+            <div style={{
+              fontSize: "0.9375rem",
+              fontWeight: 700,
+              color: "#92400e",
+              marginBottom: "0.5rem"
+            }}>
+              Recommendation Discrepancy
+            </div>
+            <div style={{
+              fontSize: "0.875rem",
+              color: "#78350f",
+              lineHeight: "1.75"
+            }}>
+              The AI risk assessment recommends <strong>{getDecisionDisplayText(lastResult.decision)}</strong>, 
+              while the underwriter recommendation is <strong>{decision.toUpperCase()}</strong>.
+            </div>
+          </div>
+        )}
       </section>
 
-      {/* Optional server-side SHAP summary for this client */}
-      {lastResult?.explanation?.top_features && (
+      {/* 2. Risk Factor Analysis */}
+      <section style={{ 
+        backgroundColor: "#ffffff",
+        padding: "2.5rem",
+        marginBottom: "2.5rem",
+        border: "1px solid #e5e7eb",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
+      }}>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          marginBottom: "2rem",
+          paddingBottom: "1rem",
+          borderBottom: "2px solid #e5e7eb"
+        }}>
+          <div style={{
+            width: "32px",
+            height: "32px",
+            borderRadius: "50%",
+            backgroundColor: "#2563eb",
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: 700,
+            fontSize: "0.875rem",
+            marginRight: "1rem"
+          }}>
+            2
+          </div>
+          <h2 style={{ 
+            margin: 0, 
+            fontSize: "1.5rem",
+            fontWeight: 700,
+            color: "#111827"
+          }}>
+            Risk Factor Analysis
+          </h2>
+        </div>
+        <p style={{ 
+          margin: "0 0 2rem 0", 
+          fontSize: "0.9375rem",
+          color: "#6b7280",
+          lineHeight: "1.75"
+        }}>
+          Detailed review of applicant information and risk factor impacts on the assessment outcome.
+        </p>
+        <div style={{
+          display: "grid",
+          gap: "1rem"
+        }}>
+          {Object.entries(applicantData.categories)
+            .filter(([category]) => {
+              // Only show categories that have dependency plots
+              const categoriesWithPlots = ["Age", "BMI", "Smoking", "Drug Use", "Sports"];
+              return categoriesWithPlots.includes(category);
+            })
+            .map(([category, qaList]) => {
+            const shapValue = shapImpacts[category];
+            const hasValue = typeof shapValue === 'number' && Number.isFinite(shapValue);
+            const color = hasValue ? getImpactColor(shapValue) : "#e5e7eb";
+            const isExpanded = expandedCategory === category;
+            
+            return (
+              <div 
+                key={category} 
+                style={{ 
+                  border: `1px solid ${isExpanded ? "#2563eb" : "#e5e7eb"}`,
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  backgroundColor: "#ffffff",
+                  transition: "all 0.2s ease",
+                  boxShadow: isExpanded ? "0 4px 6px rgba(0,0,0,0.05)" : "0 1px 2px rgba(0,0,0,0.05)"
+                }}
+              >
+                <button
+                  onClick={() => toggleExpand(category)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    backgroundColor: isExpanded ? "#f8fafc" : "#ffffff",
+                    color: "#111827",
+                    border: "none",
+                    padding: "1rem 1.25rem",
+                    cursor: "pointer",
+                    fontSize: "0.9375rem",
+                    fontWeight: 600,
+                    textAlign: "left",
+                    transition: "background-color 0.2s ease"
+                  }}
+                >
+                  <div style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "1rem",
+                    flex: 1
+                  }}>
+                    <span style={{
+                      fontSize: "1rem",
+                      fontWeight: 600,
+                      color: "#111827"
+                    }}>
+                      {category}
+                    </span>
+                    
+                    {/* SHAP Impact Indicator */}
+                    {hasValue && (
+                      <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        padding: "0.25rem 0.75rem",
+                        backgroundColor: shapValue > 0 ? "#fef2f2" : "#ecfdf5",
+                        borderRadius: "12px",
+                        border: `1px solid ${shapValue > 0 ? "#fecaca" : "#86efac"}`
+                      }}>
+                        <div
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "50%",
+                            backgroundColor: color,
+                            flexShrink: 0
+                          }}
+                        ></div>
+                        <span style={{ 
+                          fontSize: "0.75rem", 
+                          fontWeight: 600,
+                          color: shapValue > 0 ? "#dc2626" : "#059669"
+                        }}>
+                          {shapValue > 0 ? "+" : ""}{shapValue.toFixed(2)}
+                        </span>
+                        <span style={{ 
+                          fontSize: "0.7rem", 
+                          color: "#6b7280",
+                          fontWeight: 500
+                        }}>
+                          {shapValue > 0 ? "Risk" : "Protective"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Expand/Collapse Icon */}
+                  <div style={{
+                    width: "24px",
+                    height: "24px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#6b7280",
+                    transition: "transform 0.2s ease",
+                    transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)"
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                </button>
+
+                {/* Expanded Content */}
+                {isExpanded && (
+                  <div style={{
+                    padding: "1.5rem",
+                    backgroundColor: "#ffffff",
+                    borderTop: "1px solid #e5e7eb"
+                  }}>
+                    {(() => {
+                      // Map category names to plot path keys
+                      const plotKeyMap = {
+                        "Age": "age",
+                        "BMI": "bmi",
+                        "Smoking": "smoking",
+                        "Drug Use": "drug_frequency",
+                        "Sports": "sport_hours"
+                      };
+                      const plotKey = plotKeyMap[category];
+                      const depPath = plotPaths?.[plotKey];
+                      const qaItems = qaList.filter((q) => !q.dependency);
+
+                      return (
+                        <div style={{
+                          display: "grid",
+                          gridTemplateColumns: depPath ? "1fr 320px" : "1fr",
+                          gap: "2rem",
+                          alignItems: "flex-start"
+                        }}>
+                          {/* Questions and Answers */}
+                          <div>
+                            <h4 style={{
+                              margin: "0 0 1rem 0",
+                              fontSize: "0.8125rem",
+                              fontWeight: 600,
+                              color: "#6b7280",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.05em"
+                            }}>
+                              Applicant Responses
+                            </h4>
+                            <div style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "1rem"
+                            }}>
+                              {qaItems.map((item, index) => (
+                                <div 
+                                  key={index} 
+                                  style={{
+                                    padding: "1rem",
+                                    backgroundColor: "#f9fafb",
+                                    borderRadius: "6px",
+                                    border: "1px solid #e5e7eb"
+                                  }}
+                                >
+                                  <div style={{
+                                    fontSize: "0.875rem",
+                                    fontWeight: 600,
+                                    color: "#374151",
+                                    marginBottom: "0.5rem"
+                                  }}>
+                                    {item.question}
+                                  </div>
+                                  <div style={{
+                                    fontSize: "0.875rem",
+                                    color: "#6b7280",
+                                    fontFamily: "ui-monospace, monospace"
+                                  }}>
+                                    {String(item.answer ?? '—')}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Dependency Plot */}
+                          {depPath && (
+                            <div style={{
+                              position: "sticky",
+                              top: "1rem"
+                            }}>
+                              <h4 style={{
+                                margin: "0 0 1rem 0",
+                                fontSize: "0.8125rem",
+                                fontWeight: 600,
+                                color: "#6b7280",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.05em"
+                              }}>
+                                Impact Analysis
+                              </h4>
+                              <div style={{
+                                border: "1px solid #e5e7eb",
+                                borderRadius: "6px",
+                                overflow: "hidden",
+                                backgroundColor: "#ffffff"
+                              }}>
+                                <img
+                                  src={`${API_BASE}${depPath}`}
+                                  alt={`${category} dependency plot`}
+                                  style={{
+                                    width: "100%",
+                                    height: "auto",
+                                    display: "block"
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 3. Feature Impact Analysis */}
+      {lastResult?.explanation?.waterfall_url && (
         <section
           style={{
-            backgroundColor: "#eef6ff",
-            padding: "1rem",
-            borderRadius: "8px",
-            marginTop: "1.25rem",
-            border: "1px solid #d6e9ff"
+            backgroundColor: "#ffffff",
+            padding: "2.5rem",
+            marginBottom: "2.5rem",
+            border: "1px solid #e5e7eb",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
           }}
         >
-          <h2>SHAP Waterfall (top contributors)</h2>
-          <p style={{ marginTop: 0, color: "#4a5568" }}>
-            Target class: <strong>{lastResult.explanation.target_class}</strong>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            marginBottom: "2rem",
+            paddingBottom: "1rem",
+            borderBottom: "2px solid #e5e7eb"
+          }}>
+            <div style={{
+              width: "32px",
+              height: "32px",
+              borderRadius: "50%",
+              backgroundColor: "#2563eb",
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 700,
+              fontSize: "0.875rem",
+              marginRight: "1rem"
+            }}>
+              3
+            </div>
+            <h2 style={{ 
+              margin: 0, 
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              color: "#111827"
+            }}>
+              Feature Impact Analysis
+            </h2>
+          </div>
+          <p style={{ 
+            margin: "0 0 2rem 0", 
+            fontSize: "0.9375rem",
+            color: "#6b7280",
+            lineHeight: "1.75"
+          }}>
+            SHAP (SHapley Additive exPlanations) waterfall diagram illustrating the relative contribution of each risk factor to the AI assessment outcome.
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {lastResult.explanation.top_features.slice(0, 12).map((f, idx) => {
-              const val = Number(f.impact || 0);
-              const pos = val >= 0;
-              const width = Math.min(100, Math.round(Math.abs(val) * 100));
-              return (
-                <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: "0 0 240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.feature}</div>
-                  <div style={{ flex: 1, height: 12, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, position: "relative" }}>
-                    <div style={{
-                      position: "absolute",
-                      left: pos ? 0 : `calc(50% - ${width/2}%)`,
-                      right: pos ? undefined : undefined,
-                      height: "100%",
-                      width: `${width}%`,
-                      background: pos ? "#ef4444" : "#10b981",
-                      borderRadius: 6,
-                      transform: pos ? "translateX(0)" : "translateX(0)"
-                    }} />
-                  </div>
-                  <div style={{ width: 70, textAlign: "right", color: "#374151" }}>{val.toFixed(3)}</div>
-                </div>
-              );
-            })}
+          <div style={{ 
+            width: "100%", 
+            overflowX: "auto",
+            textAlign: "center"
+          }}>
+            <img
+              src={lastResult.explanation.waterfall_url}
+              alt="SHAP Waterfall Analysis"
+              style={{ 
+                maxHeight: "500px", 
+                borderRadius: "6px", 
+                border: "1px solid #e5e7eb", 
+                display: "block", 
+                margin: "0 auto"
+              }}
+            />
           </div>
         </section>
       )}
 
-      {/* Model explanation */}
+      {/* 4. Underwriter Decision */}
       <section
         style={{
-          backgroundColor: "#fff3cd",
-          padding: "1rem",
-          borderRadius: "8px",
-          marginTop: "2rem",
-          border: "1px solid #ffeeba"
+          backgroundColor: "#ffffff",
+          padding: "2.5rem",
+          marginBottom: "2.5rem",
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
         }}
       >
-  <div
-    style={{
-      display: "flex",
-      gap: "1rem",
-      alignItems: "flex-start",
-      flexWrap: "wrap",
-    }}
-  >
-    {/* Left: explanation */}
-    <div style={{ flex: 1, minWidth: "280px" }}>
-      <h2>Model Decision Explanation</h2>
-      <p>{applicantData.modelExplanation}</p>
-      <p>
-        <strong>Model Recommendation:</strong>{" "}
-        {model_decision.charAt(0).toUpperCase() + model_decision.slice(1)}
-      </p>
-    </div>
-
-    {/* Right: consolidated SHAP summary mock */}
-    <div style={{ flex: 1, minWidth: "280px" }}>
-      <h3 style={{ marginBottom: "0.5rem" }}>Feature Contributions</h3>
-      {consolidatedSHAP.map(([feature, value]) => {
-        const color = getImpactColor(value);
-        return (
-          <div
-            key={feature}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginBottom: "6px",
-              gap: "8px",
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.abs(value) * 80 + 20}px`,
-                height: "16px",
-                backgroundColor: color,
-                clipPath:
-                  value > 0
-                    ? "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%)"
-                    : "polygon(10% 0%, 100% 0%, 100% 100%, 10% 100%, 0% 50%)",
-                borderRadius: "3px",
-              }}
-            ></div>
-            <span
-              style={{
-                fontSize: "0.85rem",
-                color,
-                fontWeight: "bold",
-              }}
-            >
-              {value > 0 ? "+" : ""}
-              {value}
-            </span>
-            <span style={{ fontSize: "0.8rem", color: "#333" }}>{feature}</span>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          marginBottom: "2rem",
+          paddingBottom: "1rem",
+          borderBottom: "2px solid #e5e7eb"
+        }}>
+          <div style={{
+            width: "32px",
+            height: "32px",
+            borderRadius: "50%",
+            backgroundColor: "#2563eb",
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: 700,
+            fontSize: "0.875rem",
+            marginRight: "1rem"
+          }}>
+            4
           </div>
-        );
-      })}
-    </div>
-  </div>
-  </section>
-      <section>
-        <div style={{ backgroundColor: "#f8f9fa", borderRadius: "8px", padding: "1rem" }}>
+          <h2 style={{ 
+            margin: 0, 
+            fontSize: "1.5rem",
+            fontWeight: 700,
+            color: "#111827"
+          }}>
+            Underwriter Decision
+          </h2>
+        </div>
+        <p style={{ 
+          margin: "0 0 2rem 0", 
+          fontSize: "0.9375rem",
+          color: "#6b7280",
+          lineHeight: "1.75"
+        }}>
+          Review the AI risk assessment above and provide your final underwriting recommendation.
+        </p>
+
+        <div style={{ 
+          backgroundColor: "#f9fafb", 
+          borderRadius: "8px", 
+          padding: "2rem",
+          border: "1px solid #e5e7eb"
+        }}>
+          <h3 style={{ 
+            margin: "0 0 1.5rem 0", 
+            fontSize: "0.875rem",
+            fontWeight: 600,
+            color: "#374151",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em"
+          }}>
+            Select Recommendation
+          </h3>
           <div
+            onChange={(e) => setDecision(e.target.value)}
             style={{
-              padding: "1rem",
-              backgroundColor: "#f8f9fa",
-              borderRadius: "8px",
-              marginTop: "1rem",
-              width: "100%", // or fixed like "400px"
-              minHeight: "150px", // makes box taller
               display: "flex",
               flexDirection: "column",
-              justifyContent: "space-between", // spaces out vertically
+              gap: "1rem",
             }}
           >
-            <h3>Underwriter Decision</h3>
-            
-            <div
-              onChange={(e) => setDecision(e.target.value)}
+            <label style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "1rem",
+              padding: "1.25rem",
+              borderRadius: "8px",
+              border: decision === "accept" ? "2px solid #10b981" : "1px solid #d1d5db",
+              backgroundColor: decision === "accept" ? "#ecfdf5" : "white",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              marginBottom: "1rem"
+            }}>
+              <input 
+                type="radio" 
+                name="decision" 
+                value="accept"
+                checked={decision === "accept"}
+                onChange={() => setDecision("accept")}
+                style={{ margin: "0.25rem 0 0 0" }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ 
+                  fontSize: "1rem",
+                  fontWeight: 600,
+                  color: decision === "accept" ? "#059669" : "#374151",
+                  marginBottom: "0.5rem"
+                }}>
+                  Accept Application
+                </div>
+                <div style={{ 
+                  fontSize: "0.875rem", 
+                  color: "#6b7280",
+                  lineHeight: "1.6"
+                }}>
+                  Approve this application for life insurance coverage based on acceptable risk profile.
+                </div>
+              </div>
+            </label>
+
+            <label style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "1rem",
+              padding: "1.25rem",
+              borderRadius: "8px",
+              border: decision === "reject" ? "2px solid #ef4444" : "1px solid #d1d5db",
+              backgroundColor: decision === "reject" ? "#fef2f2" : "white",
+              cursor: "pointer",
+              transition: "all 0.2s"
+            }}>
+              <input 
+                type="radio" 
+                name="decision" 
+                value="reject"
+                checked={decision === "reject"}
+                onChange={() => setDecision("reject")}
+                style={{ margin: "0.25rem 0 0 0" }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ 
+                  fontSize: "1rem",
+                  fontWeight: 600,
+                  color: decision === "reject" ? "#dc2626" : "#374151",
+                  marginBottom: "0.5rem"
+                }}>
+                  Decline Application
+                </div>
+                <div style={{ 
+                  fontSize: "0.875rem", 
+                  color: "#6b7280",
+                  lineHeight: "1.6"
+                }}>
+                  Decline this application due to elevated risk factors that do not meet underwriting criteria.
+                </div>
+              </div>
+            </label>
+          </div>
+          <div style={{ 
+            marginTop: "2rem", 
+            paddingTop: "2rem", 
+            borderTop: "2px solid #e5e7eb" 
+          }}>
+            <label style={{ 
+              display: "block", 
+              fontSize: "0.8125rem", 
+              fontWeight: 600, 
+              marginBottom: "0.75rem", 
+              color: "#374151",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em"
+            }}>
+              Additional Notes (Optional)
+            </label>
+            <textarea
+              id="additional_comments"
+              name="additional_comments"
+              rows="4"
+              placeholder="Provide additional notes, context, or reasoning for your underwriting decision..."
               style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "1rem", // adds consistent spacing between options
-                padding: "0.5rem 1rem",
+                width: "100%",
+                padding: "1rem",
+                borderRadius: "6px",
+                border: "1px solid #d1d5db",
+                fontSize: "0.875rem",
+                resize: "vertical",
+                boxSizing: "border-box",
+                fontFamily: "inherit",
+                backgroundColor: "#ffffff",
+                lineHeight: "1.6"
               }}
-            >
-              <label>
-                <input type="radio" name="decision" value="accept" /> Accept
-              </label>
-
-              <label>
-                <input type="radio" name="decision" value="reject" /> Reject
-              </label>
-
-              <label>
-                <input type="radio" name="decision" value="accept_high_premium" /> Accept with Higher Premium
-              </label>
-            </div>
+            />
           </div>
-          <div style={{ marginTop: "1rem" }}>
-          <div style={{ fontSize: "0.95rem", marginBottom: "0.35rem" }}>
-            Additional comments (optional)
-          </div>
-          <textarea
-            id="additional_comments"
-            name="additional_comments"
-            rows="3"
-            placeholder="Any notes for underwriting or context..."
-            style={{
-              width: "100%",
-              padding: "0.5rem",
-              borderRadius: "4px",
-              border: "1px solid #ccc",
-              fontSize: "0.95rem",
-              resize: "vertical",
-              boxSizing: "border-box"
-            }}
-          />
         </div>
-        </div>
-        {decision && (
-          <p style={{ marginTop: "1rem" , color: "#175fc4ff"}}>
-            <strong>Selected decision:</strong>{" "}
-            {decision
-              .replace(/_/g, " ")
-              .replace(/\b\w/g, (c) => c.toUpperCase())}
-          </p>
-        )}
-        <div style={{ marginTop: "1rem" , display: "flex", justifyContent: "flex-end" }}>
+        
+        <div style={{ 
+          marginTop: "1.5rem", 
+          display: "flex", 
+          justifyContent: "flex-end", 
+          gap: "0.75rem" 
+        }}>
           <button
-            onClick={() => {
+            onClick={async () => {
               if (!decision) {
                 alert("Please select a decision before submitting.");
                 return;
               }
-              // Prevent submitting accept for empty documents
-              // Validation can be added here if needed
-              const pretty = (d) => d.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-              if (decision !== model_decision) {
+              // Show confirmation if decision differs from AI assessment
+              if (lastResult?.decision && normalizeDecision(decision) !== normalizeDecision(lastResult.decision)) {
+                const aiDisplay = getDecisionDisplayText(lastResult.decision);
                 const proceed = window.confirm(
-                  `Model recommended "${pretty(model_decision)}" but you chose "${pretty(decision)}".\n\nDo you want to proceed?`
+                  `Recommendation Discrepancy\n\n` +
+                  `AI Assessment: ${aiDisplay}\n` +
+                  `Your Recommendation: ${decision.toUpperCase()}\n\n` +
+                  `Proceed with submitting your recommendation?`
                 );
                 if (!proceed) {
                   return;
                 }
-                alert(`Decision "${pretty(decision)}" submitted.`);
+              }
+              
+              // Save decision to backend
+              if (data?.id) {
+                try {
+                  const humanPrediction = decision === "accept" ? "Accepted" : "Rejected";
+                  const response = await fetch(`${API_BASE}/documents/${data.id}/human-prediction`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ human_prediction: humanPrediction })
+                  });
+                  
+                  if (response.ok) {
+                    // Show success confetti animation
+                    setShowSuccessConfetti(true);
+                  } else {
+                    throw new Error('Failed to save decision');
+                  }
+                } catch (error) {
+                  console.error('Error saving decision:', error);
+                  alert(`Failed to save decision: ${error.message}. Please try again.`);
+                }
               } else {
-                alert(`Decision "${pretty(decision)}" submitted.`);
+                alert(`Underwriting recommendation "${decision.toUpperCase()}" has been submitted.`);
               }
             }}
+            disabled={!decision}
             style={{
-              padding: "0.6rem 1rem",
-              backgroundColor: "#007bff",
+              padding: "0.625rem 1.5rem",
+              backgroundColor: decision ? "#2563eb" : "#9ca3af",
               color: "#fff",
               border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "1rem",
-              
+              borderRadius: "6px",
+              cursor: decision ? "pointer" : "not-allowed",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              transition: "all 0.2s"
             }}
           >
             Submit Decision
           </button>
         </div>
       </section>
+
+      {loading && (
+        <div className="modal-overlay">
+          <div className="modal-content extraction-modal">
+            <AnalysisAnimation />
+          </div>
+        </div>
+      )}
+
+      {showSuccessConfetti && (
+        <SuccessConfetti 
+          onComplete={() => {
+            // After animation completes, reload the page
+            setTimeout(() => {
+              if (window.location) {
+                window.location.reload();
+              }
+            }, 500);
+          }}
+        />
+      )}
 
     </div>
     

@@ -8,6 +8,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "fastapi>=0.120.4",
     "httpx>=0.28.1",
+    "matplotlib>=3.10.7",
     "joblib>=1.5.2",
     "matplotlib>=3.9.0",
     "numpy>=2.3.4",
@@ -27,6 +28,6 @@ dependencies = [
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
-# Single-module layout (mjust uv aodule is `main.py` in the project root)
+# Single-module layout (module is `main.py` in the project root)
 [tool.setuptools]
 py-modules = ["main"]
