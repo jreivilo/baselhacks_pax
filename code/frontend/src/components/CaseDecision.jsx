@@ -86,7 +86,10 @@ function buildPayload(applicantData) {
   const medication_type = findRiskKeyword(getCategoryAnswer(applicantData, 'Medication Type')) || 'safe';
   const sports_activity_h_per_week = parseNumber(getCategoryAnswer(applicantData, 'Sports Activity (hours/week)'));
   const earning_chf = parseNumber(getCategoryAnswer(applicantData, 'Earning (CHF)'));
-
+    // const [modelExplanation, setModelExplanation] = useState(
+    //     data?.model_explanation ||
+    //     `Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk.`
+    // );
   return {
     gender, age, marital_status,
     height_cm, weight_kg, bmi,
@@ -103,7 +106,7 @@ function buildPayload(applicantData) {
   };
 }
 
-async function handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts }) {
+async function handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts, setModelExplanation }) {
   try {
     setError("");
     setLoading(true);
@@ -111,6 +114,10 @@ async function handleRunCalculationInner({ applicantData, setLoading, setError, 
     const result = await callPredictAPI(payload);
     setDecision(result.decision || "");
     setLastResult(result);
+    console.log(result.explanation);
+    if (result.explanation?.model_explanation) {
+          setModelExplanation(result.explanation.model_explanation);
+    }
     // Update SHAP impacts mapping for the category bars
     const grouped = result?.explanation?.grouped_impacts || [];
     const mapping = grouped.reduce((acc, g) => { acc[g.category] = Number(g.impact || 0); return acc; }, {});
@@ -139,7 +146,8 @@ export default function CaseDecision({ data, onBack }) {
       ],
       "Age": [
         { question: "What is your current age?", answer: data?.age },
-        { question: "Has your age been verified through official ID?", answer: "Yes" }
+        { question: "Has your age been verified through official ID?", answer: "Yes" },
+          {dependency: plotPaths.age}
       ],
       "Marital Status": [
         { question: "What is your marital status?", answer: data?.marital_status }
@@ -192,7 +200,9 @@ export default function CaseDecision({ data, onBack }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastResult, setLastResult] = useState(null);
-
+  const [modelExplanation, setModelExplanation] = useState(
+        applicantData.modelExplanation
+    );
   const toggleExpand = (cat) =>
     setExpandedCategory(expandedCategory === cat ? null : cat);
 
@@ -291,7 +301,7 @@ const getImpactColor = (value) => {
           style={{ width: "auto" }}
           type="button"
           disabled={loading}
-          onClick={() => handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts })}
+          onClick={() => handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts,setModelExplanation})}
         >
           {loading ? "Calculating..." : "Run Calculation"}
         </button>
@@ -505,7 +515,9 @@ const getImpactColor = (value) => {
           padding: "1rem",
           borderRadius: "8px",
           marginTop: "2rem",
-          border: "1px solid #ffeeba"
+          border: "1px solid #ffeeba",
+            marginBottom :"2rem"
+
         }}
       >
   <div
@@ -514,12 +526,13 @@ const getImpactColor = (value) => {
       gap: "1rem",
       alignItems: "flex-start",
       flexWrap: "wrap",
+        marginBottom :"2rem"
     }}
   >
     {/* Left: explanation */}
     <div style={{ flex: 1, minWidth: "280px" }}>
       <h2>Model Decision Explanation</h2>
-      <p>{applicantData.modelExplanation}</p>
+      <p>{modelExplanation}</p>
       <p>
         <strong>Model Recommendation:</strong>{" "}
         {model_decision.charAt(0).toUpperCase() + model_decision.slice(1)}
@@ -527,48 +540,50 @@ const getImpactColor = (value) => {
     </div>
 
     {/* Right: consolidated SHAP summary mock */}
-    <div style={{ flex: 1, minWidth: "280px" }}>
-      <h3 style={{ marginBottom: "0.5rem" }}>Feature Contributions</h3>
-      {consolidatedSHAP.map(([feature, value]) => {
-        const color = getImpactColor(value);
-        return (
-          <div
-            key={feature}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginBottom: "6px",
-              gap: "8px",
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.abs(value) * 80 + 20}px`,
-                height: "16px",
-                backgroundColor: color,
-                clipPath:
-                  value > 0
-                    ? "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%)"
-                    : "polygon(10% 0%, 100% 0%, 100% 100%, 10% 100%, 0% 50%)",
-                borderRadius: "3px",
-              }}
-            ></div>
-            <span
-              style={{
-                fontSize: "0.85rem",
-                color,
-                fontWeight: "bold",
-              }}
-            >
-              {value > 0 ? "+" : ""}
-              {value}
-            </span>
-            <span style={{ fontSize: "0.8rem", color: "#333" }}>{feature}</span>
-          </div>
-        );
-      })}
-    </div>
+    {/*<div style={{ flex: 1, minWidth: "280px" }}>*/}
+    {/*  <h3 style={{ marginBottom: "0.5rem" }}>Feature Contributions</h3>*/}
+    {/*  {consolidatedSHAP.map(([feature, value]) => {*/}
+    {/*    const color = getImpactColor(value);*/}
+    {/*    return (*/}
+    {/*      <div*/}
+    {/*        key={feature}*/}
+    {/*        style={{*/}
+    {/*          display: "flex",*/}
+    {/*          alignItems: "center",*/}
+    {/*          marginBottom: "6px",*/}
+    {/*          gap: "8px",*/}
+    {/*        }}*/}
+    {/*      >*/}
+    {/*        <div*/}
+    {/*          style={{*/}
+    {/*            width: `${Math.abs(value) * 80 + 20}px`,*/}
+    {/*            height: "16px",*/}
+    {/*            backgroundColor: color,*/}
+    {/*            clipPath:*/}
+    {/*              value > 0*/}
+    {/*                ? "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%)"*/}
+    {/*                : "polygon(10% 0%, 100% 0%, 100% 100%, 10% 100%, 0% 50%)",*/}
+    {/*            borderRadius: "3px",*/}
+    {/*          }}*/}
+    {/*        ></div>*/}
+    {/*        <span*/}
+    {/*          style={{*/}
+    {/*            fontSize: "0.85rem",*/}
+    {/*            color,*/}
+    {/*            fontWeight: "bold",*/}
+    {/*          }}*/}
+    {/*        >*/}
+    {/*          {value > 0 ? "+" : ""}*/}
+    {/*          {value}*/}
+    {/*        </span>*/}
+    {/*        <span style={{ fontSize: "0.8rem", color: "#333" }}>{feature}</span>*/}
+    {/*      </div>*/}
+    {/*    );*/}
+    {/*  })}*/}
+    {/*</div>*/}
+
   </div>
+
   </section>
       <section style={{  }}>
         <div style={{  backgroundColor: "#f8f9fa", borderRadius: "8px", padding: "1rem" }}>
@@ -604,9 +619,9 @@ const getImpactColor = (value) => {
                 <input type="radio" name="decision" value="reject" /> Reject
               </label>
 
-              <label>
-                <input type="radio" name="decision" value="accept_high_premium" /> Accept with Higher Premium
-              </label>
+              {/*<label>*/}
+              {/*  <input type="radio" name="decision" value="accept_high_premium" /> Accept with Higher Premium*/}
+              {/*</label>*/}
             </div>
           </div>
           <div style={{ marginTop: "1rem" }}>

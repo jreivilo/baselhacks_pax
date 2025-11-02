@@ -6,7 +6,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-
+import joblib
 from openai import AsyncOpenAI
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +15,10 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import io
 from fastapi.staticfiles import StaticFiles
-
+import xgboost as xgb
+import numpy as np
+import shap
+import pandas as pd
 # import dependency_plots module safely and attach its router if available
 dep_router = None
 try:
@@ -38,8 +41,55 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Initialize OpenAI client
 if OPENAI_API_KEY:
     client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+else:
+    client = None
 
 app = FastAPI(title="PAX Document Processing API")
+async def generate_model_explanation(decision: str, explanation: Dict[str, Any]) -> Optional[str]:
+    """
+    Use OpenAI to generate a one-sentence human-readable explanation
+    of the model's decision using SHAP feature impacts.
+    """
+    if not client:
+        return None
+
+    try:
+        top_features = explanation.get("top_features", [])
+        grouped_impacts = explanation.get("grouped_impacts", [])
+        target_class = explanation.get("target_class", decision)
+
+        # Compact summaries for the prompt
+        top_summary = ", ".join(
+            [f"{f['feature']} ({f['impact']:+.2f})" for f in top_features[:5]]
+        )
+        grouped_summary = ", ".join(
+            [f"{g['category']}: {g['impact']:+.2f}" for g in grouped_impacts[:5]]
+        )
+
+        prompt = f"""
+        The AI insurance risk model predicted "{target_class}" for this applicant.
+
+        Top SHAP feature contributions:
+        {top_summary}
+
+        Grouped impacts by category:
+        {grouped_summary}
+
+        Write one clear sentence describing the model's reasoning, for example:
+        "Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk."
+        """
+
+        response = await client.responses.create(
+            model="gpt-4.1-mini",
+            input=prompt,
+            temperature=0.4,
+        )
+
+        return response.output[0].content[0].text.strip()
+
+    except Exception as e:
+        print("⚠️ OpenAI model explanation failed:", e)
+        return None
 
 # serve generated dependency plots from backend/static/dependency_plots
 static_dir = Path(__file__).resolve().parents[0] / "static" / "dependency_plots"
@@ -746,14 +796,25 @@ def predict(req: PredictRequest) -> PredictResponse:
                 "base_value": base_value,
                 **groups,
             }
+            model_explanation = None
+            if explanation and OPENAI_API_KEY:
+                try:
+                    model_explanation = asyncio.run(generate_model_explanation(decision, explanation))
+                except Exception as e:
+                    print("Model explanation generation failed:", e)
+                    model_explanation = None
         except Exception as e:
             # Provide graceful degradation if SHAP fails
             explanation = {"error": f"SHAP explanation failed: {e}"}
 
+    print (f"Decision: {decision}, explanation: {model_explanation}")
     return PredictResponse(
         decision=decision,
         probabilities=prob_map,
         score=score,
         model_version=MANIFEST.get("created_at"),
-        explanation=explanation,
+        explanation={
+            **(explanation or {}),
+            "model_explanation": model_explanation,
+        } if explanation else None,
     )
