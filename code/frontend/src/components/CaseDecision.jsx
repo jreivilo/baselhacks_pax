@@ -108,7 +108,8 @@ function buildPayload(applicantData, data) {
 }
 
 
-async function handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts, setModelExplanation }) {
+async function handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts, setModelExplanation,data
+}) {
 
   try {
     setError("");
@@ -271,7 +272,7 @@ const getImpactColor = (value) => {
           type="button"
           disabled={loading}
 
-          onClick={() => handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts,setModelExplanation})}
+          onClick={() => handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts,setModelExplanation ,data})}
        >
           {loading ? "Calculating..." : "Run Calculation"}
         </button>
@@ -464,7 +465,9 @@ const getImpactColor = (value) => {
             padding: "1rem",
             borderRadius: "8px",
             marginTop: "1.25rem",
-            border: "1px solid #d6e9ff"
+            border: "1px solid #d6e9ff",
+              textAlign: "center",       // center the image
+              marginInline: "auto",      // center horizontally
           }}
         >
           <h2>SHAP Waterfall</h2>
@@ -475,7 +478,7 @@ const getImpactColor = (value) => {
             <img
               src={lastResult.explanation.waterfall_url}
               alt="SHAP Waterfall"
-              style={{ width: "min(720px, 100%)", height: "auto", borderRadius: 6, border: "1px solid #d6e9ff", display: "block", margin: "0 auto" }}
+              style={{ maxHeight: "500px", borderRadius: 6, border: "1px solid #d6e9ff", display: "block", margin: "0 auto" }}
             />
           </div>
         </section>

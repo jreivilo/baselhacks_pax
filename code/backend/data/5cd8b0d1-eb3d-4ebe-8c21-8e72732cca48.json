@@ -34,5 +34,14 @@
   "occupation": "Student",
   "sports": "dio",
   "medical_conditions": "dlcdc",
-  "annual_income": "10000"
+  "annual_income": "10000",
+  "dependency_plot_paths": {
+    "age": "/dependency_plots/age.png",
+    "bmi": "/dependency_plots/bmi.png",
+    "smoking": "/dependency_plots/smoking.png",
+    "drug_frequency": "/dependency_plots/drug_frequency.png",
+    "sport_hours": "/dependency_plots/sport_hours.png"
+  },
+  "first_name": "s",
+  "last_name": "s"
 }

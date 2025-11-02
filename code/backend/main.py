@@ -18,16 +18,15 @@ from fastapi.staticfiles import StaticFiles
 import xgboost as xgb
 import numpy as np
 import shap
-<<<<<<< HEAD
+
 import pandas as pd
 # import dependency_plots module safely and attach its router if available
 dep_router = None
-=======
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import sys
->>>>>>> f102a10b479dd00cbda3109a86cf7d7d36a01fb4
 try:
     import api.dependency_plots as dependency_plots_mod
     # prefer an exported 'router' object
