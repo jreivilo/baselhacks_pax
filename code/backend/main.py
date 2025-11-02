@@ -102,29 +102,35 @@ async def generate_model_explanation(decision: str, explanation: Dict[str, Any])
             [f"{g['category']}: {g['impact']:+.2f}" for g in grouped_impacts[:5]]
         )
 
-        prompt = f"""
-        The AI insurance risk model predicted "{target_class}" for this applicant.
+        prompt = f"""The AI insurance risk model predicted "{target_class}" for this applicant.
 
-        Top SHAP feature contributions:
-        {top_summary}
+Top SHAP feature contributions: {top_summary}
 
-        Grouped impacts by category:
-        {grouped_summary}
+Grouped impacts by category: {grouped_summary}
 
-        Write one clear sentence describing the model's reasoning, for example:
-        "Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk."
-        """
+Write one clear, professional sentence describing the model's reasoning for this decision. Focus on the key risk factors that influenced the outcome. For example: "Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk." """
 
-        response = await client.responses.create(
-            model="gpt-4.1-mini",
-            input=prompt,
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert insurance underwriter explaining AI model predictions in clear, professional language."},
+                {"role": "user", "content": prompt}
+            ],
             temperature=0.4,
+            max_tokens=150
         )
 
-        return response.output[0].content[0].text.strip()
+        if response.choices and len(response.choices) > 0:
+            content = response.choices[0].message.content
+            if content:
+                return content.strip()
+        
+        return None
 
     except Exception as e:
         print("⚠️ OpenAI model explanation failed:", e)
+        import traceback
+        traceback.print_exc()
         return None
 
 # serve generated dependency plots from backend/static/dependency_plots
@@ -825,7 +831,7 @@ def _group_shap_contributions(contrib: np.ndarray) -> Dict[str, Any]:
 
 
 @app.post("/predict", response_model=PredictResponse)
-def predict(req: PredictRequest) -> PredictResponse:
+async def predict(req: PredictRequest) -> PredictResponse:
     # Lazy-load once if not yet loaded (e.g., server started before artifacts were written)
     global PREPROCESSOR, LABEL_ENCODER, BOOSTER, FEATURE_META
     if PREPROCESSOR is None or LABEL_ENCODER is None or BOOSTER is None or not FEATURE_META:
@@ -910,15 +916,25 @@ def predict(req: PredictRequest) -> PredictResponse:
             model_explanation = None
             if explanation and OPENAI_API_KEY:
                 try:
-                    model_explanation = asyncio.run(generate_model_explanation(decision, explanation))
+                    model_explanation = await generate_model_explanation(decision, explanation)
+                    if not model_explanation:
+                        print("⚠️ Model explanation generation returned None - check OpenAI API key and connection")
                 except Exception as e:
-                    print("Model explanation generation failed:", e)
+                    print("⚠️ Model explanation generation failed:", e)
+                    import traceback
+                    traceback.print_exc()
                     model_explanation = None
         except Exception as e:
             # Provide graceful degradation if SHAP fails
             explanation = {"error": f"SHAP explanation failed: {e}"}
 
-    print (f"Decision: {decision}, explanation: {model_explanation}")
+    if model_explanation:
+        print(f"✅ Decision: {decision}, Model explanation generated successfully")
+    elif OPENAI_API_KEY:
+        print(f"⚠️ Decision: {decision}, Model explanation generation failed (check API key or OpenAI service)")
+    else:
+        print(f"ℹ️ Decision: {decision}, Model explanation skipped (OPENAI_API_KEY not configured)")
+    
     return PredictResponse(
         decision=decision,
         probabilities=prob_map,
