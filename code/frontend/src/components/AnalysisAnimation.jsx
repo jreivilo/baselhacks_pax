@@ -14,7 +14,7 @@ export default function AnalysisAnimation(){
             style={{ width: '350px', height: '350px' }}
           />
         </div>
-        <h3 className="extraction-text">Running risk analysis...</h3>
+        <h3 className="extraction-text">Processing risk assessment...</h3>
       </div>
     </div>
   )
