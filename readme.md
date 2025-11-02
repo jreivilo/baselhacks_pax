@@ -451,4 +451,4 @@ For issues or questions:
 
 ---
 
-**Built for Basel Hacks 2024** 🇨🇭
+**Built for Basel Hacks 2025** 🇨🇭
