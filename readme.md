@@ -2,6 +2,29 @@
 
 **PAX** is an intelligent document processing and underwriting decision support system that combines OpenAI Vision API for data extraction, XGBoost for risk prediction, and SHAP for explainable AI. It streamlines insurance form processing while providing transparent, data-driven risk assessment with human-in-the-loop decision making.
 
+---
+
+## 📊 The Decision Pipeline in Action
+
+### Step 1: AI Decision Executive Summary
+AI-generated explanation of the risk assessment and model reasoning:
+
+![Decision Executive Summary](assets/decision_exec_summary.png)
+
+### Step 2: SHAP Explainability Analysis
+Feature-by-feature breakdown showing which applicant characteristics drove the prediction:
+
+![SHAP Analysis](assets/shap_analysis.png)
+
+### Step 3: Underwriter Decision
+Human underwriter reviews all information and makes the final binding decision:
+
+![Underwriter Decision](assets/underwriter_decision.png)
+
+---
+
+## 🎯 System Overview
+
 ![PAX System Overview](assets/main.png)
 
 ## 🎯 System Overview
@@ -85,8 +108,6 @@ OpenAI Vision API automatically extracts 13 structured fields from insurance for
 - Address, Annual Income
 - Document ID, Filename, Upload Timestamp
 
-![Data Extraction](assets/main.png)
-
 ### Stage 2: Risk Prediction & SHAP Analysis
 XGBoost model predicts risk category with per-feature importance visualization:
 
@@ -94,17 +115,8 @@ XGBoost model predicts risk category with per-feature importance visualization:
 - **Dependency Plots** — Reveals non-linear feature relationships
 - **Risk Categories** — Safe | Warning | Danger
 
-![SHAP Analysis](assets/shap_analysis.png)
-
 ### Stage 3: Decision Executive Summary
-GenAI generates a one-sentence decision summary explaining the model's reasoning:
-
-> *"Based on this person's critical heart condition and old age of 65, the model predicts a high insurance payout risk (Danger category)."*
-
-**Underwriter Decision** — Human underwriter reviews the AI recommendation and makes the final binding decision, with full audit trail.
-
-![Decision Summary](assets/decision_exec_summary.png)
-![Underwriter Decision](assets/underwriter_decision.png)
+GenAI generates a one-sentence decision summary explaining the model's reasoning (see workflow images at top)
 
 ---
 
