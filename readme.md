@@ -373,22 +373,6 @@ Each processed insurance application includes:
 
 ## 🛠️ Development
 
-### Building Backend
-
-```bash
-cd code/backend
-uv sync
-uv run uvicorn main:app --reload
-```
-
-### Building Frontend
-
-```bash
-cd code/frontend
-npm install
-npm run dev
-```
-
 ### Model Training
 
 Update the ML model with new training data:
