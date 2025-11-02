@@ -139,7 +139,7 @@ export default function CaseDecision({ data, onBack }) {
 
  const applicantData = {
     general: {
-      name: data?.name || "Applicant",
+      name: (`${data?.first_name ?? ''} ${data?.last_name ?? ''}`.trim()) || "Applicant",
       birthdate: data?.birthdate || "Not provided",
       address: data?.address || "—"
     },
