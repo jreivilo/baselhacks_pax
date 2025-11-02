@@ -370,21 +370,21 @@ Each processed insurance application includes:
 
 ## 🛠️ Development
 
-### Running Tests
+### Building Backend
 
 ```bash
 cd code/backend
-uv run pytest
+uv sync
+uv run uvicorn main:app --reload
 ```
 
 ### Building Frontend
 
 ```bash
 cd code/frontend
-npm run build
+npm install
+npm run dev
 ```
-
-Output in `dist/` directory
 
 ### Model Training
 
