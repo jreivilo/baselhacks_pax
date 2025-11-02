@@ -1,43 +1,49 @@
-# BaselHacks PAX — Document Upload
+# PAX Frontend
 
-Simple drag & drop document upload interface for the BaselHacks "Automate Underwriting" challenge.
+React UI for insurance form processing and risk analysis.
 
-## 🚀 How to Run
+## Setup
 
+1. Install dependencies:
 ```bash
 cd code/frontend
 npm install
+```
+
+2. Start development server:
+```bash
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser.
+Open http://localhost:5173
 
-## 🎯 Features
+## Main Features
 
-- **Drag & Drop Upload**: Drag files directly onto the upload zone
-- **File Browser**: Click to browse and select files
-- **Document Preview**: View uploaded documents with thumbnails (images) or icons
-- **No Backend**: Pure frontend (backend integration to be added later)
+**Document Upload**
+- Drag & drop insurance form PDFs or click to browse
+- Multiple file support with preview thumbnails
 
-## 📁 Component Architecture
+**Data Extraction**
+- Automatic form data extraction via OpenAI Vision API
+- Parsed applicant info (name, age, health history, lifestyle factors)
+- Structured JSON output with all insurance-relevant fields
 
+**Risk Analysis**
+- XGBoost model predicts risk category: Safe, Warning, or Danger
+- SHAP explainability shows which factors drove the prediction
+- Interactive dependency plots visualize feature relationships
+
+**Document Management**
+- View all uploaded documents with extraction status
+- Review extracted data before saving
+- Edit and save document information
+- Download original PDFs
+- Search and filter documents
+
+## Build
+
+```bash
+npm run build
 ```
-App.jsx
-└── FileUpload.jsx         # Upload zone + file state management
-    └── DocumentPreview.jsx  # Individual document cards with preview
-```
 
-## 🎨 Styling
-
-PAX colors (from pax.ch):
-- Primary: `#005f73` (teal)
-- Accent: `#ffd166` (warm yellow)
-
-## � Current Scope
-
-✅ Drag & drop file upload  
-✅ Document preview grid  
-✅ Remove uploaded files  
-⏳ Backend integration (to be implemented)  
-⏳ Information extraction (to be implemented)  
-⏳ Review interface (to be implemented)
+Output in `dist/` directory

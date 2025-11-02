@@ -12,10 +12,21 @@ function isFieldValid(field, value) {
   if (typeof value === 'number' && isNaN(value)) return false
   
   // For required numeric fields, 0 is typically invalid (age, height, weight can't be 0)
-  // But allow 0 for optional fields like packs_per_week, drug_frequency
-  const requiredNumericFields = ['age', 'height_cm', 'weight_kg', 'earning_chf']
+  const requiredNumericFields = ['age', 'height_cm', 'weight_kg']
   if (requiredNumericFields.includes(field) && typeof value === 'number' && value === 0) {
     return false
+  }
+  
+  // These fields accept 0 as a valid value (unemployed, no smoking, no drugs, etc.)
+  // earning_chf can be 0 (unemployed or no income) and should not make the form incomplete
+  const fieldsThatAcceptZero = ['bmi', 'packs_per_week', 'drug_frequency', 'sports_activity_h_per_week', 'earning_chf']
+  if (fieldsThatAcceptZero.includes(field) && typeof value === 'number' && value === 0) {
+    return true // 0 is valid for these fields
+  }
+  
+  // For earning_chf specifically, ensure 0 is treated as valid
+  if (field === 'earning_chf' && typeof value === 'number' && value === 0) {
+    return true
   }
   
   return true
