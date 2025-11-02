@@ -474,7 +474,7 @@ const getImpactColor = (value) => {
           </p>
           <div style={{ width: "100%", overflowX: "auto" }}>
             <img
-              src={lastResult.explanation.waterfall_url}
+              src={git lastResult.explanation.waterfall_url}
               alt="SHAP Waterfall"
               style={{ maxHeight: "500px", borderRadius: 6, border: "1px solid #d6e9ff", display: "block", margin: "0 auto" }}
             />

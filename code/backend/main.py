@@ -154,6 +154,7 @@ static_dir = STATIC_DIR / "dependency_plots"
 static_dir.mkdir(parents=True, exist_ok=True)
 WATERFALLS_DIR = STATIC_DIR / "waterfalls"
 WATERFALLS_DIR.mkdir(parents=True, exist_ok=True)
+RECOMMENDATIONS_DIR = STATIC_DIR / "model_recommendations_plot"
 
 # Include dependency plots router FIRST (before GET route to avoid conflicts)
 # Note: Vite proxy strips /api prefix, so router should not have /api prefix
@@ -182,6 +183,19 @@ async def get_waterfall_plot(filename: str):
         raise HTTPException(status_code=404, detail="Waterfall image not found")
     return FileResponse(
         img_file,
+        media_type="image/png",
+        headers={"Content-Disposition": "inline"}
+    )
+
+@app.get("/model_recommendations_plot/{filename}")
+async def get_model_recommendation_plot(filename: str):
+    """Serve dependency plot images."""
+    plot_file = RECOMMENDATIONS_DIR / filename
+    print("Requested model recommendation plot:", plot_file)
+    if not plot_file.exists():
+        raise HTTPException(status_code=404, detail="Plot not found")
+    return FileResponse(
+        plot_file,
         media_type="image/png",
         headers={"Content-Disposition": "inline"}
     )

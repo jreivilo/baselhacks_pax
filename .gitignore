@@ -9,7 +9,6 @@ __pycache__/
 .env.local
 datageneration/*.json
 code/backend/data/*.json
-code/backend/static/*
 *.egg-info/
 
 !package*.json

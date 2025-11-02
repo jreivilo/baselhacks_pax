@@ -143,6 +143,12 @@ export default function Models() {
   const report = selectedSuggestion ? REPORT_CONTENT[selectedSuggestion] : null
   const currentSuggestion = suggestions.find(s => s.id === selectedSuggestion)
   const acceptedCount = suggestions.filter(s => s.status === 'accepted').length
+  // Build absolute image URL to the backend GET endpoint so the browser
+  // issues a direct GET request to FastAPI. Adjust the host/port if your
+  // backend runs elsewhere.
+  const recommendationImgUrl = selectedSuggestion
+    ? `http://localhost:8000/model_recommendations_plot/${encodeURIComponent(selectedSuggestion)}.png`
+    : null
 
   return (
     <div className="analytics-container">
@@ -246,7 +252,23 @@ export default function Models() {
               <h2>Model Change Recommendation</h2>
               <div className="recommendation-single">
                 <p className="recommendation-text">{report.recommendations[0]}</p>
+
+                {recommendationImgUrl && (
+                  <div style={{ width: "100%", overflowX: "auto" }}>
+                    <img
+                      src={recommendationImgUrl}
+                      alt={`${currentSuggestion?.title || 'recommendation'} plot`}
+                      style={{ width: '100%', height: 'auto', maxWidth: '100%', objectFit: 'contain', borderRadius: 6, border: '1px solid #d6e9ff', display: 'block', margin: '0 auto' }}
+                      onError={(e) => { e.currentTarget.style.display = 'none'
+                        console.log("Failed to load recommendation image:", e);
+                       }}
+                    />
+                  </div>
+                )}
               </div>
+              
+
+
             </div>
 
             <div className="report-actions">
