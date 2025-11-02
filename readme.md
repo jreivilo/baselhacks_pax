@@ -2,6 +2,9 @@
 
 **PAX** is an intelligent document processing and underwriting decision support system that combines OpenAI Vision API for data extraction, XGBoost for risk prediction, and SHAP for explainable AI. It streamlines insurance form processing while providing transparent, data-driven risk assessment with human-in-the-loop decision making.
 
+### DEMO VIDEO : 
+[Link to Demo Video](https://drive.google.com/drive/folders/1U1SiXQ0ZcuvW1Xbl8Y1Xf8F5cwJJzBhM?usp=sharing)
+
 ![PAX System Overview](assets/main.png)
 
 ---
