@@ -192,7 +192,7 @@ export default function DocumentDetail({ documentId, onUpdate }){
 
       //worst case fallback
       const withDefaults = {
-
+        id: docData.id ?? documentId,
         // === Basic Information ===
         first_name: docData.first_name ?? "Anna",
         last_name: docData.last_name ?? "Tester",
