@@ -61,10 +61,11 @@ async function callPredictAPI(payload) {
   return res.json();
 }
 
-function buildPayload(applicantData) {
+function buildPayload(applicantData, data) {
   // Extract values from our demo structure with best-effort normalization
   const gender = normalizeGender(getCategoryAnswer(applicantData, 'Gender'));
   const age = parseNumber(getCategoryAnswer(applicantData, 'Age'));
+  const birthdate = data?.birthdate || applicantData?.general?.birthdate || undefined;
   const marital_status = String(getCategoryAnswer(applicantData, 'Marital Status') || '').toLowerCase() || undefined;
   const height_cm = parseNumber(getCategoryAnswer(applicantData, 'Height (cm)'));
   const weight_kg = parseNumber(getCategoryAnswer(applicantData, 'Weight (kg)'));
@@ -106,11 +107,13 @@ function buildPayload(applicantData) {
   };
 }
 
+
 async function handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts, setModelExplanation }) {
+
   try {
     setError("");
     setLoading(true);
-    const payload = buildPayload(applicantData);
+    const payload = buildPayload(applicantData, data);
     const result = await callPredictAPI(payload);
     setDecision(result.decision || "");
     setLastResult(result);
@@ -130,8 +133,8 @@ async function handleRunCalculationInner({ applicantData, setLoading, setError, 
   }
 }
 export default function CaseDecision({ data, onBack }) {
-  const model_decision = "reject";
   const plotPaths = data.dependency_plot_paths || {};
+  const model_decision = "reject";
 
  const applicantData = {
     general: {
@@ -141,21 +144,22 @@ export default function CaseDecision({ data, onBack }) {
     },
     categories: {
       "Gender": [
-        { question: "What is your gender?", answer: data?.gender },
-        { question: "Do you identify with your registered gender?", answer: "Yes" }
+        { question: "What is your gender?", answer: data?.gender }
       ],
       "Age": [
+
         { question: "What is your current age?", answer: data?.age },
         { question: "Has your age been verified through official ID?", answer: "Yes" },
           {dependency: plotPaths.age}
+
       ],
       "Marital Status": [
         { question: "What is your marital status?", answer: data?.marital_status }
       ],
       "BMI": [
-        { question: "What is your BMI?", answer: data?.bmi },
         { question: "Height (cm)", answer: data?.height_cm },
-        { question: "Weight (kg)", answer: data?.weight_kg }
+        { question: "Weight (kg)", answer: data?.weight_kg },
+        { question: "BMI", answer: data?.bmi }
       ],
       "Smoking": [
         { question: "Do you smoke?", answer: data?.smoking ? "Yes" : "No" },
@@ -184,15 +188,7 @@ export default function CaseDecision({ data, onBack }) {
       ]
     },
     modelExplanation:
-      `Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk.`,
-    non_modelFactors:
-        {"application_year": 2006,
-    "risk_multiplier": 0.8621382,
-    "risk_score": 0.1002100210021002,
-    "underwriter_score": 0.1003,
-    "underwriter_decision": "accept_with_premium",
-    "premium_loading": 0.1}
-    
+      `Based on this person's critical heart condition and old age of 70, the model predicts a high insurance payout risk.`
   };
 
   const [expandedCategory, setExpandedCategory] = useState(null);
@@ -206,39 +202,12 @@ export default function CaseDecision({ data, onBack }) {
   const toggleExpand = (cat) =>
     setExpandedCategory(expandedCategory === cat ? null : cat);
 
-  // Persisted SHAP-like impact values (stable across re-renders and page reloads)
-  const SHAP_STORAGE_KEY = "shapImpacts_v1";
-  const [shapImpacts, setShapImpacts] = useState(() => {
-    try {
-      const raw = localStorage.getItem(SHAP_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const categoryKeys = Object.keys(applicantData.categories);
-        const hasAll = categoryKeys.every((k) => typeof parsed[k] !== "undefined");
-        if (hasAll) return parsed;
-      }
-    } catch (e) {
-      // ignore and regenerate on error
-    }
-
-    const generated = Object.keys(applicantData.categories).reduce((acc, key) => {
-      acc[key] = parseFloat((Math.random() * 2 - 1).toFixed(2)); // -1 to 1 numeric
-      return acc;
-    }, {});
-
-    try { localStorage.setItem(SHAP_STORAGE_KEY, JSON.stringify(generated)); } catch {}
-
-    return generated;
-  });
+  // SHAP impacts start empty; they will be filled after a successful model run.
+  const [shapImpacts, setShapImpacts] = useState({});
 
   const updateShapImpacts = (newMap) => {
-    try {
-      const merged = { ...shapImpacts, ...newMap };
-      localStorage.setItem(SHAP_STORAGE_KEY, JSON.stringify(merged));
-      setShapImpacts(merged);
-    } catch {
-      setShapImpacts({ ...shapImpacts, ...newMap });
-    }
+    // Merge backend-provided values; no localStorage or placeholders.
+    setShapImpacts((prev) => ({ ...prev, ...newMap }));
   };
 
 const getImpactColor = (value) => {
@@ -301,8 +270,9 @@ const getImpactColor = (value) => {
           style={{ width: "auto" }}
           type="button"
           disabled={loading}
+
           onClick={() => handleRunCalculationInner({ applicantData, setLoading, setError, setDecision, setLastResult, updateShapImpacts,setModelExplanation})}
-        >
+       >
           {loading ? "Calculating..." : "Run Calculation"}
         </button>
       </div>
@@ -344,7 +314,8 @@ const getImpactColor = (value) => {
         <h2>Risk Factor Details</h2>
         {Object.entries(applicantData.categories).map(([category, qaList]) => {
           const shapValue = shapImpacts[category];
-          const color = getImpactColor(shapValue); // <-- add this
+          const hasValue = typeof shapValue === 'number' && Number.isFinite(shapValue);
+          const color = hasValue ? getImpactColor(shapValue) : "#cccccc";
             return (
             <div key={category} style={{ marginBottom: "1rem" }}>
               <button
@@ -368,33 +339,42 @@ const getImpactColor = (value) => {
                 {category} {expandedCategory === category ? "▲" : "▼"}
               </span>
 
-              {/* Mock SHAP mini-plot */}
+              {/* Per-category SHAP mini-plot (shown after model run) */}
               <div
                 style={{
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  minWidth: "120px",
+                  justifyContent: "flex-end"
                 }}
               >
-                <div
-                style={{
-                  position: "relative",
-                  height: "18px",
-                  width: getBarWidth(shapValue),
-                  backgroundColor: color,
-                  clipPath:
-                  shapValue > 0
-                    ? "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%)"
-                    : "polygon(10% 0%, 100% 0%, 100% 100%, 10% 100%, 0% 50%)",
-                  borderRadius: "3px",
-                  transition: "width 0.3s ease",
-                }}
-                ></div>
-                <span style={{ fontSize: "0.8rem", color: "#4c4848ff" }}>
-                {shapValue > 0 ? "+" : ""}
-                {shapValue}
-                </span>
+                {hasValue ? (
+                  <>
+                    <div
+                      style={{
+                        position: "relative",
+                        height: "18px",
+                        width: getBarWidth(shapValue),
+                        backgroundColor: color,
+                        clipPath:
+                          shapValue > 0
+                            ? "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%)"
+                            : "polygon(10% 0%, 100% 0%, 100% 100%, 10% 100%, 0% 50%)",
+                        borderRadius: "3px",
+                        transition: "width 0.3s ease",
+                      }}
+                    ></div>
+                    <span style={{ fontSize: "0.8rem", color: "#4c4848ff" }}>
+                      {shapValue > 0 ? "+" : ""}
+                      {shapValue}
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ fontSize: "0.8rem", color: "#6b7280", fontStyle: "italic" }}>
+                  </span>
+                )}
               </div>
               </button>
 
@@ -409,10 +389,19 @@ const getImpactColor = (value) => {
                 }}
               >
                 {(() => {
-                const depItem = qaList.find((q) => q.dependency_plot_path);
-                const depPath = depItem?.dependency_plot_path;
-                // show only QA items that are not the dependency placeholder
-                const qaItems = qaList.filter((q) => !q.dependency_plot_path);
+                // Map category names to plot path keys
+                const plotKeyMap = {
+                  "Age": "age",
+                  "BMI": "bmi",
+                  "Smoking": "smoking",
+                  "Drug Use": "drug_frequency",
+                  "Sports": "sport_hours"
+                };
+                const plotKey = plotKeyMap[category];
+                const depPath = plotPaths?.[plotKey];
+
+                // show all QA items
+                const qaItems = qaList.filter((q) => !q.dependency);
 
                 return (
                   <div
@@ -428,7 +417,7 @@ const getImpactColor = (value) => {
                     <p key={index} style={{ marginBottom: "0.75rem" }}>
                       <strong>{item.question}</strong>
                       <br />
-                      Answer: {String(item.answer)}
+                      Answer: {String(item.answer ?? '—')}
                     </p>
                     ))}
                   </div>
@@ -442,8 +431,10 @@ const getImpactColor = (value) => {
                       alignSelf: "flex-start",
                     }}
                     >
+
                       <img
                         src={`${API_BASE}${depPath}`}
+
                         alt={`${category} dependency plot`}
                         style={{
                           width: "100%",
@@ -452,7 +443,7 @@ const getImpactColor = (value) => {
                           boxSizing: "border-box"
                         }}
                       />
-                    <br />
+
                     </div>
                   )}
                   </div>
@@ -465,8 +456,8 @@ const getImpactColor = (value) => {
         })}
       </section>
 
-      {/* Optional server-side SHAP summary for this client */}
-      {lastResult?.explanation?.top_features && (
+      {/* Server-rendered SHAP waterfall image (from backend) */}
+      {lastResult?.explanation?.waterfall_url && (
         <section
           style={{
             backgroundColor: "#eef6ff",
@@ -476,34 +467,16 @@ const getImpactColor = (value) => {
             border: "1px solid #d6e9ff"
           }}
         >
-          <h2>SHAP Waterfall (top contributors)</h2>
+          <h2>SHAP Waterfall</h2>
           <p style={{ marginTop: 0, color: "#4a5568" }}>
             Target class: <strong>{lastResult.explanation.target_class}</strong>
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {lastResult.explanation.top_features.slice(0, 12).map((f, idx) => {
-              const val = Number(f.impact || 0);
-              const pos = val >= 0;
-              const width = Math.min(100, Math.round(Math.abs(val) * 100));
-              return (
-                <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: "0 0 240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.feature}</div>
-                  <div style={{ flex: 1, height: 12, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, position: "relative" }}>
-                    <div style={{
-                      position: "absolute",
-                      left: pos ? 0 : `calc(50% - ${width/2}%)`,
-                      right: pos ? undefined : undefined,
-                      height: "100%",
-                      width: `${width}%`,
-                      background: pos ? "#ef4444" : "#10b981",
-                      borderRadius: 6,
-                      transform: pos ? "translateX(0)" : "translateX(0)"
-                    }} />
-                  </div>
-                  <div style={{ width: 70, textAlign: "right", color: "#374151" }}>{val.toFixed(3)}</div>
-                </div>
-              );
-            })}
+          <div style={{ width: "100%", overflowX: "auto" }}>
+            <img
+              src={lastResult.explanation.waterfall_url}
+              alt="SHAP Waterfall"
+              style={{ width: "min(720px, 100%)", height: "auto", borderRadius: 6, border: "1px solid #d6e9ff", display: "block", margin: "0 auto" }}
+            />
           </div>
         </section>
       )}
@@ -539,54 +512,12 @@ const getImpactColor = (value) => {
       </p>
     </div>
 
-    {/* Right: consolidated SHAP summary mock */}
-    {/*<div style={{ flex: 1, minWidth: "280px" }}>*/}
-    {/*  <h3 style={{ marginBottom: "0.5rem" }}>Feature Contributions</h3>*/}
-    {/*  {consolidatedSHAP.map(([feature, value]) => {*/}
-    {/*    const color = getImpactColor(value);*/}
-    {/*    return (*/}
-    {/*      <div*/}
-    {/*        key={feature}*/}
-    {/*        style={{*/}
-    {/*          display: "flex",*/}
-    {/*          alignItems: "center",*/}
-    {/*          marginBottom: "6px",*/}
-    {/*          gap: "8px",*/}
-    {/*        }}*/}
-    {/*      >*/}
-    {/*        <div*/}
-    {/*          style={{*/}
-    {/*            width: `${Math.abs(value) * 80 + 20}px`,*/}
-    {/*            height: "16px",*/}
-    {/*            backgroundColor: color,*/}
-    {/*            clipPath:*/}
-    {/*              value > 0*/}
-    {/*                ? "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%)"*/}
-    {/*                : "polygon(10% 0%, 100% 0%, 100% 100%, 10% 100%, 0% 50%)",*/}
-    {/*            borderRadius: "3px",*/}
-    {/*          }}*/}
-    {/*        ></div>*/}
-    {/*        <span*/}
-    {/*          style={{*/}
-    {/*            fontSize: "0.85rem",*/}
-    {/*            color,*/}
-    {/*            fontWeight: "bold",*/}
-    {/*          }}*/}
-    {/*        >*/}
-    {/*          {value > 0 ? "+" : ""}*/}
-    {/*          {value}*/}
-    {/*        </span>*/}
-    {/*        <span style={{ fontSize: "0.8rem", color: "#333" }}>{feature}</span>*/}
-    {/*      </div>*/}
-    {/*    );*/}
-    {/*  })}*/}
-    {/*</div>*/}
 
   </div>
 
   </section>
-      <section style={{  }}>
-        <div style={{  backgroundColor: "#f8f9fa", borderRadius: "8px", padding: "1rem" }}>
+      <section>
+        <div style={{ backgroundColor: "#f8f9fa", borderRadius: "8px", padding: "1rem" }}>
           <div
             style={{
               padding: "1rem",
@@ -661,10 +592,7 @@ const getImpactColor = (value) => {
                 return;
               }
               // Prevent submitting accept for empty documents
-              if (decision === 'accept' && isEmpty) {
-                alert("Cannot accept incomplete case. Please complete all required fields first.");
-                return;
-              }
+              // Validation can be added here if needed
               const pretty = (d) => d.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
               if (decision !== model_decision) {
                 const proceed = window.confirm(

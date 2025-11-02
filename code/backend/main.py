@@ -18,9 +18,16 @@ from fastapi.staticfiles import StaticFiles
 import xgboost as xgb
 import numpy as np
 import shap
+<<<<<<< HEAD
 import pandas as pd
 # import dependency_plots module safely and attach its router if available
 dep_router = None
+=======
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import sys
+>>>>>>> f102a10b479dd00cbda3109a86cf7d7d36a01fb4
 try:
     import api.dependency_plots as dependency_plots_mod
     # prefer an exported 'router' object
@@ -31,6 +38,33 @@ try:
 except Exception as e:
     dep_router = None
     print("Warning: failed to import api.dependency_plots:", e)
+
+# Compatibility shim for older sklearn pickle files
+# This handles the case where pickle files were created with older sklearn versions
+# that had _RemainderColsList class which no longer exists in sklearn 1.7.2
+def _setup_sklearn_compatibility():
+    """Set up compatibility shims for older sklearn pickle files."""
+    try:
+        import sklearn.compose._column_transformer as ct_module
+        # Check if the old class exists, if not create a compatibility shim
+        if not hasattr(ct_module, '_RemainderColsList'):
+            # Create a dummy class for pickle compatibility
+            # This must match what old sklearn versions had (it was a subclass of list)
+            class _RemainderColsList(list):
+                """Compatibility shim for old sklearn pickles that reference _RemainderColsList"""
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+            
+            # Add to module namespace - this is critical for pickle to find it
+            ct_module._RemainderColsList = _RemainderColsList
+            # Also ensure it's in sys.modules if the module was already loaded
+            if 'sklearn.compose._column_transformer' in sys.modules:
+                sys.modules['sklearn.compose._column_transformer']._RemainderColsList = _RemainderColsList
+    except Exception as e:
+        print(f"Warning: Could not set up sklearn compatibility shim: {e}")
+
+# Set up compatibility shims at import time - MUST happen before any pickle loading
+_setup_sklearn_compatibility()
 
 # Load environment variables
 load_dotenv()
@@ -43,6 +77,9 @@ if OPENAI_API_KEY:
     client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 else:
     client = None
+
+# Import dependency plots router (before app creation to avoid circular imports)
+from api.dependency_plots import router as dependency_plots_router
 
 app = FastAPI(title="PAX Document Processing API")
 async def generate_model_explanation(decision: str, explanation: Dict[str, Any]) -> Optional[str]:
@@ -111,6 +148,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files for dependency plots and SHAP waterfalls
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+static_dir = STATIC_DIR / "dependency_plots"
+static_dir.mkdir(parents=True, exist_ok=True)
+WATERFALLS_DIR = STATIC_DIR / "waterfalls"
+WATERFALLS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Include dependency plots router FIRST (before GET route to avoid conflicts)
+# Note: Vite proxy strips /api prefix, so router should not have /api prefix
+app.include_router(dependency_plots_router, tags=["dependency-plots"])
+
+# Serve static files for dependency plots via a dedicated endpoint
+# This comes AFTER the router so POST requests are handled first
+# Note: Vite proxy strips /api, so this endpoint should not have /api prefix
+@app.get("/dependency_plots/{filename}")
+async def get_dependency_plot(filename: str):
+    """Serve dependency plot images."""
+    plot_file = static_dir / filename
+    if not plot_file.exists():
+        raise HTTPException(status_code=404, detail="Plot not found")
+    return FileResponse(
+        plot_file,
+        media_type="image/png",
+        headers={"Content-Disposition": "inline"}
+    )
+
+@app.get("/waterfalls/{filename}")
+async def get_waterfall_plot(filename: str):
+    """Serve SHAP waterfall plot images."""
+    img_file = WATERFALLS_DIR / filename
+    if not img_file.exists():
+        raise HTTPException(status_code=404, detail="Waterfall image not found")
+    return FileResponse(
+        img_file,
+        media_type="image/png",
+        headers={"Content-Disposition": "inline"}
+    )
+
 # Data storage directory
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -152,8 +228,17 @@ def load_model_artifacts() -> None:
     manifest_path = MODEL_DIR / "manifest.json"
 
     if pre_path.exists():
-        PREPROCESSOR = joblib.load(pre_path)
-        print("Loaded preprocessor")
+        try:
+            PREPROCESSOR = joblib.load(pre_path)
+            print("Loaded preprocessor")
+        except AttributeError as e:
+            if "_RemainderColsList" in str(e):
+                # Ensure compatibility shim is set up and try again
+                _setup_sklearn_compatibility()
+                PREPROCESSOR = joblib.load(pre_path)
+                print("Loaded preprocessor (with compatibility mode)")
+            else:
+                raise
     if le_path.exists():
         LABEL_ENCODER = joblib.load(le_path)
         print("Loaded label encoder")
@@ -442,6 +527,12 @@ async def upload_document(files: List[UploadFile] = File(...)) -> Dict[str, Any]
         # Merge workflow result with extracted data (all fields optional)
         if isinstance(workflow_result, dict):
             # Add all fields from workflow, keeping them optional
+            # Map surname to last_name for consistency with frontend
+            if 'surname' in workflow_result:
+                extracted_data['last_name'] = workflow_result.get('surname')
+            if 'first_name' in workflow_result:
+                extracted_data['first_name'] = workflow_result.get('first_name')
+            
             for key in ['gender', 'age', 'birthdate', 'marital_status', 'height_cm', 'weight_kg', 
                        'bmi', 'smoking', 'packs_per_week', 'drug_use', 'drug_frequency', 'drug_type',
                        'staying_abroad', 'abroad_type', 'dangerous_sports', 'sport_type', 
@@ -791,9 +882,26 @@ def predict(req: PredictRequest) -> PredictResponse:
                 contrib = np.array(values).reshape(-1)
 
             groups = _group_shap_contributions(contrib)
+            # Try to generate a SHAP waterfall image for the predicted class
+            waterfall_url = None
+            try:
+                feature_names: List[str] = FEATURE_META.get("all_feature_names_after_pre", [])
+                exp = shap.Explanation(values=contrib, base_values=base_value, feature_names=feature_names)
+                fig = plt.figure(figsize=(8, 6))
+                shap.plots.waterfall(exp, max_display=15, show=False)
+                fname = f"{uuid.uuid4().hex}.png"
+                fpath = WATERFALLS_DIR / fname
+                plt.tight_layout()
+                fig.savefig(fpath, dpi=150, bbox_inches="tight")
+                plt.close(fig)
+                waterfall_url = f"/waterfalls/{fname}"
+            except Exception:
+                waterfall_url = None
+
             explanation = {
                 "target_class": decision,
                 "base_value": base_value,
+                "waterfall_url": waterfall_url,
                 **groups,
             }
             model_explanation = None

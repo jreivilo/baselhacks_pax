@@ -63,7 +63,11 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.120.4" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "joblib", specifier = ">=1.5.2" },
+<<<<<<< HEAD
     { name = "matplotlib", specifier = ">=3.10.7" },
+=======
+    { name = "matplotlib", specifier = ">=3.9.0" },
+>>>>>>> f102a10b479dd00cbda3109a86cf7d7d36a01fb4
     { name = "numpy", specifier = ">=2.3.4" },
     { name = "openai", specifier = ">=2.6.1" },
     { name = "pandas", specifier = ">=2.3.3" },

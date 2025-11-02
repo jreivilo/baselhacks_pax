@@ -1,27 +1,5 @@
 import React, { useState } from 'react'
 
-// Static model suggestions/propositions
-const MODEL_SUGGESTIONS = [
-  {
-    id: 'bmi-sport',
-    title: 'BMI and Sport',
-    description: 'BMI threshold with sports activity frequency',
-    status: 'accepted'
-  },
-  {
-    id: 'age-occupation',
-    title: 'Age and Occupation',
-    description: 'Age limit with occupation risk level',
-    status: 'pending'
-  },
-  {
-    id: 'lung-smoking',
-    title: 'Lung Disease and Smoking',
-    description: 'Lung disease status with smoking history',
-    status: 'rejected'
-  }
-]
-
 // Static report content for each suggestion
 const REPORT_CONTENT = {
   'bmi-sport': {
@@ -60,34 +38,111 @@ const REPORT_CONTENT = {
       'Train model with counterfactual data where applicants with age < 65 AND occupation_risk_level <= 4 are labeled as ACCEPT based on past underwriter patterns'
     ]
   },
-  'lung-smoking': {
-    title: 'Lung Disease and Smoking',
-    summary: 'Lung disease status combined with smoking history.',
-    executiveSummary: 'Underwriters frequently overrode rejections for former smokers who quit 5+ years ago and have no lung disease history. Comments state that risk diminishes significantly after extended cessation periods for individuals without pre-existing lung conditions. Multiple cases show underwriters noting that long-term former smokers without lung disease should be evaluated similarly to never-smokers, as the elevated risk from smoking has subsided.',
+  'medical-smoking': {
+    title: 'Medical Issues and Heavy Smoking',
+    summary: 'Medical conditions combined with high smoking frequency.',
+    executiveSummary: 'Underwriter analysis reveals that applicants with existing medical issues who also have high smoking frequency (10+ packs per week) present significantly elevated risk that exceeds current model predictions. Underwriters consistently note that medical conditions combined with heavy smoking create multiplicative health risks, particularly for cardiovascular and respiratory conditions. Multiple cases show underwriters rejecting such applicants even when individual risk factors might be borderline acceptable.',
     technicalFeatures: {
-      condition: 'lung_disease = false AND (smoking_status = "never" OR (smoking_status = "former" AND years_since_quit >= 5))',
-      decision: 'ACCEPT',
-      reasoning: 'Former smokers without lung disease acceptable after 5+ years quit'
+      condition: 'medical_issue = true AND packs_per_week >= 10',
+      decision: 'REJECT',
+      reasoning: 'Applicants with medical issues and heavy smoking (10+ packs/week) have compounded risk exceeding model predictions.'
     },
     statistics: [
-      { label: 'Expected Sales Decrease', value: '-22.7%', color: 'red' },
+      { label: 'Expected Sales Impact', value: '-15.3%', color: 'red' },
       { label: 'Cases Analyzed', value: '856', color: 'blue' },
       { label: 'Confidence Level', value: '94%', color: 'purple' }
     ],
     recommendations: [
-      'Train model with counterfactual data where applicants with lung_disease = false AND (smoking_status = "never" OR (smoking_status = "former" AND years_since_quit >= 5)) are labeled as ACCEPT based on past underwriter patterns'
+      'Train model to REJECT applicants with medical_issue = true AND packs_per_week >= 10 due to compounded risk factors exceeding model predictions.'
     ]
   }
 }
 
 export default function Models() {
   const [selectedSuggestion, setSelectedSuggestion] = useState(null)
+  const [suggestions, setSuggestions] = useState([
+    {
+      id: 'bmi-sport',
+      title: 'BMI and Sport',
+      description: 'BMI threshold with sports activity frequency',
+      status: 'accepted'
+    },
+    {
+      id: 'age-occupation',
+      title: 'Age and Occupation',
+      description: 'Age limit with occupation risk level',
+      status: 'pending'
+    },
+    {
+      id: 'medical-smoking',
+      title: 'Medical Issues and Heavy Smoking',
+      description: 'Medical conditions with high smoking frequency',
+      status: 'rejected'
+    }
+  ])
 
   function handleSuggestionClick(suggestionId) {
     setSelectedSuggestion(suggestionId)
   }
 
+  function handleAcceptProposition() {
+    if (selectedSuggestion) {
+      setSuggestions(prev => 
+        prev.map(suggestion => 
+          suggestion.id === selectedSuggestion 
+            ? { ...suggestion, status: 'accepted' }
+            : suggestion
+        )
+      )
+    }
+  }
+
+  function handleRejectProposition() {
+    if (selectedSuggestion) {
+      setSuggestions(prev => 
+        prev.map(suggestion => 
+          suggestion.id === selectedSuggestion 
+            ? { ...suggestion, status: 'rejected' }
+            : suggestion
+        )
+      )
+    }
+  }
+
+  function handleApplyChanges() {
+    const acceptedPropositions = suggestions.filter(s => s.status === 'accepted')
+    
+    if (acceptedPropositions.length === 0) {
+      alert('No accepted propositions to apply.')
+      return
+    }
+
+    // Process accepted propositions
+    const acceptedIds = acceptedPropositions.map(p => p.id)
+    const propositionsToApply = acceptedIds.map(id => ({
+      id,
+      ...REPORT_CONTENT[id],
+      status: 'applied'
+    }))
+
+    // Here you would typically send this to a backend API
+    console.log('Applying accepted propositions:', propositionsToApply)
+    
+    // Update status to 'applied' for accepted propositions
+    setSuggestions(prev => 
+      prev.map(suggestion => 
+        suggestion.status === 'accepted'
+          ? { ...suggestion, status: 'applied' }
+          : suggestion
+      )
+    )
+
+    alert(`Successfully applied ${acceptedPropositions.length} model proposition(s).`)
+  }
+
   const report = selectedSuggestion ? REPORT_CONTENT[selectedSuggestion] : null
+  const currentSuggestion = suggestions.find(s => s.id === selectedSuggestion)
+  const acceptedCount = suggestions.filter(s => s.status === 'accepted').length
 
   return (
     <div className="analytics-container">
@@ -97,7 +152,7 @@ export default function Models() {
           <p className="sidebar-subtitle">Top 3 auto-generated proposals from precision evaluation and underwriter overrides</p>
         </div>
         <div className="suggestions-list">
-          {MODEL_SUGGESTIONS.map((suggestion) => (
+          {suggestions.map((suggestion) => (
             <button
               key={suggestion.id}
               className={`suggestion-item ${selectedSuggestion === suggestion.id ? 'active' : ''}`}
@@ -112,6 +167,33 @@ export default function Models() {
               <p className="suggestion-description">{suggestion.description}</p>
             </button>
           ))}
+        </div>
+        <div className="sidebar-footer" style={{
+          padding: '16px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
+        }}>
+          <button
+            className="btn-apply-changes"
+            onClick={handleApplyChanges}
+            disabled={acceptedCount === 0}
+            style={{
+              width: '100%',
+              padding: '12px 20px',
+              backgroundColor: acceptedCount > 0 ? 'var(--pax-primary)' : 'var(--border)',
+              color: acceptedCount > 0 ? 'white' : 'rgba(0,0,0,0.5)',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '1rem',
+              fontWeight: 600,
+              cursor: acceptedCount > 0 ? 'pointer' : 'not-allowed',
+              transition: 'all 0.2s'
+            }}
+          >
+            Apply Changes {acceptedCount > 0 && `(${acceptedCount})`}
+          </button>
         </div>
       </div>
 
@@ -165,6 +247,23 @@ export default function Models() {
               <div className="recommendation-single">
                 <p className="recommendation-text">{report.recommendations[0]}</p>
               </div>
+            </div>
+
+            <div className="report-actions">
+              <button 
+                className="btn-accept-proposition"
+                onClick={handleAcceptProposition}
+                disabled={currentSuggestion?.status === 'accepted'}
+              >
+                Accept Proposition
+              </button>
+              <button 
+                className="btn-reject-proposition"
+                onClick={handleRejectProposition}
+                disabled={currentSuggestion?.status === 'rejected'}
+              >
+                Reject Proposition
+              </button>
             </div>
           </div>
         ) : (

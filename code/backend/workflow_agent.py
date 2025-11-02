@@ -35,7 +35,8 @@ class FormDataSchema(BaseModel):
 	sports_activity_h_per_week: Optional[str] = Field(None, description="Sports activity hours per week")
 	earning_chf: Optional[str] = Field(None, description="Annual earning in CHF")
 	birthdate: Optional[str] = Field(None, description="Birthdate in YYYY-MM-DD format")
-
+	first_name: Optional[str] = Field(None, description="First name of the applicant")
+	surname: Optional[str] = Field(None, description="Surname (last name/family name) of the applicant")
 
 AGENT_INSTRUCTIONS = """You are an expert data extractor. 
 Your task is to read a PDF and return structured form data in the **exact JSON schema** defined by the function calling schema.  
@@ -57,7 +58,14 @@ Your task is to read a PDF and return structured form data in the **exact JSON s
 
 ### Field meaning hints:
 - gender: "male" or "female" → "m" or "f"
+- first_name: First name of the applicant (Prämienzahler)
+- surname: Surname (last name/family name) of the applicant (Prämienzahler, not the doctor's name)
+- address: Address of the applicant (Prämienzahler), Strasse Hausnummer
+- drug_frequency: Frequency of drug use (Prämienzahler), default is 0
 - marital_status: "single", "married", "divorced", "widowed", etc.
+- sports: Sports of the applicant default is ""
+- sports_activity: Sports activity of the applicant default is 0
+- medical_conditions: Medical conditions of the applicant default is ""
 - drug_type, abroad_type, sport_type, medical_type, medication_type: "safe", "warning", "danger", or "unknown"
 - If a risk/type/label cannot be confidently inferred → "unknown"
 - Use best judgment for context-based inference; otherwise follow the empty/unknown rules above.
@@ -111,7 +119,9 @@ async def run_extraction_agent(client: AsyncOpenAI, pdf_base64: str) -> Dict[str
 						"medication_type": {"type": "string", "description": "Medication risk type: 'safe', 'warning', 'danger', 'unknown'"},
 						"sports_activity_h_per_week": {"type": "string", "description": "Sports activity hours per week"},
 						"earning_chf": {"type": "string", "description": "Annual earning in CHF"},
-						"birthdate": {"type": "string", "description": "Birthdate in YYYY-MM-DD format"}
+						"birthdate": {"type": "string", "description": "Birthdate in YYYY-MM-DD format"},
+						"first_name": {"type": "string", "description": "First name of the applicant"},
+						"surname": {"type": "string", "description": "Surname (last name/family name) of the applicant"}
 					},
 					"required": []  # All fields are optional
 				}

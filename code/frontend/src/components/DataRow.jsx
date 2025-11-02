@@ -123,14 +123,6 @@ export default function DataRow({ data, onSave }){
           )}
         </div>
 
-        <div className="data-field full-width">
-          <label>Annual Income</label>
-          {isEditing ? (
-            <input type="text" value={formData.annual_income} onChange={(e) => handleChange('annual_income', e.target.value)} />
-          ) : (
-            <span>{formData.annual_income}</span>
-          )}
-        </div>
       </div>
 
       <div className="data-row-footer">

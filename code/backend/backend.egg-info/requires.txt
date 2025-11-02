@@ -1,8 +1,13 @@
 dotenv>=0.9.9
 fastapi>=0.120.4
 httpx>=0.28.1
+<<<<<<< HEAD
 matplotlib>=3.10.7
 joblib>=1.5.2
+=======
+joblib>=1.5.2
+matplotlib>=3.9.0
+>>>>>>> f102a10b479dd00cbda3109a86cf7d7d36a01fb4
 numpy>=2.3.4
 openai>=2.6.1
 pandas>=2.3.3
