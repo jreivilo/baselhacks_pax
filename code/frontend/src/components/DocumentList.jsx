@@ -36,21 +36,19 @@ function isFieldValid(field, value) {
 function isDocumentIncomplete(doc) {
   if (!doc) return true
   
-  // BMI is now required (must be filled)
-  const requiredFields = [
-    'first_name', 'last_name', 'age', 'gender', 'address', 'occupation', 'height_cm', 'weight_kg', 'bmi',
-    'medical_conditions', 'sports', 'birthdate', 
-    'marital_status', 'smoking', 'drug_use', 'drug_type', 'staying_abroad',
-    'abroad_type', 'dangerous_sports', 'sport_type', 'medical_issue',
-    'medical_type', 'doctor_visits', 'visit_type', 'regular_medication',
-    'medication_type', 'earning_chf', 'packs_per_week', 'drug_frequency',
-    'sports_activity_h_per_week'
-  ]
+  // A document is only incomplete if it has NO identifying information at all
+  // This prevents newly uploaded documents from being marked incomplete
+  // when the extraction didn't find all fields
   
-  // Check if any required field is invalid
-  return requiredFields.some(field => {
-    return !isFieldValid(field, doc[field])
-  })
+  // At least one of these core identifying fields must be present
+  const hasFirstName = doc.first_name && typeof doc.first_name === 'string' && doc.first_name.trim() !== ''
+  const hasLastName = doc.last_name && typeof doc.last_name === 'string' && doc.last_name.trim() !== ''
+  const hasAge = doc.age && typeof doc.age === 'number' && !isNaN(doc.age) && doc.age > 0
+  
+  // If at least one identifying field is present, document is NOT incomplete
+  const hasIdentifyingInfo = hasFirstName || hasLastName || hasAge
+  
+  return !hasIdentifyingInfo
 }
 
 export default function DocumentList({ documents, selectedId, onSelect, loading, onDelete }){

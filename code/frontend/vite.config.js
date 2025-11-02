@@ -13,7 +13,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ''),
         secure: false,
         ws: true,
-        timeout: 10000,
+        timeout: 150000,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
             // Only log if it's not a connection refused error (backend not running)
