@@ -18,7 +18,10 @@ def generate_dependency_plots(applicant: dict):
     """Generate dependency plots dynamically for the applicant."""
     try:
         # === extract applicant data ===
-        age = applicant.get("age", 40)
+        try:
+            age = float(applicant.get("age", 40) or 40)
+        except (TypeError, ValueError):
+            age = 40
         bmi = applicant.get("bmi", 25)
         smoking = applicant.get("smoking", False)
         drug_freq = applicant.get("drug_frequency", 0.0)

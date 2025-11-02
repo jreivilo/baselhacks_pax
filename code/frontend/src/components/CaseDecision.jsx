@@ -150,8 +150,6 @@ export default function CaseDecision({ data, onBack }) {
       "Age": [
 
         { question: "What is your current age?", answer: data?.age },
-        { question: "Has your age been verified through official ID?", answer: "Yes" },
-          {dependency: plotPaths.age}
 
       ],
       "Marital Status": [
