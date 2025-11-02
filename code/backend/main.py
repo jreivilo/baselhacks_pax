@@ -19,6 +19,9 @@ import pandas as pd
 import joblib
 import xgboost as xgb
 import shap
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import sys
 try:
     from PIL import Image
@@ -77,11 +80,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for dependency plots
+# Mount static files for dependency plots and SHAP waterfalls
 STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 static_dir = STATIC_DIR / "dependency_plots"
 static_dir.mkdir(parents=True, exist_ok=True)
+WATERFALLS_DIR = STATIC_DIR / "waterfalls"
+WATERFALLS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Include dependency plots router FIRST (before GET route to avoid conflicts)
 # Note: Vite proxy strips /api prefix, so router should not have /api prefix
@@ -98,6 +103,18 @@ async def get_dependency_plot(filename: str):
         raise HTTPException(status_code=404, detail="Plot not found")
     return FileResponse(
         plot_file,
+        media_type="image/png",
+        headers={"Content-Disposition": "inline"}
+    )
+
+@app.get("/waterfalls/{filename}")
+async def get_waterfall_plot(filename: str):
+    """Serve SHAP waterfall plot images."""
+    img_file = WATERFALLS_DIR / filename
+    if not img_file.exists():
+        raise HTTPException(status_code=404, detail="Waterfall image not found")
+    return FileResponse(
+        img_file,
         media_type="image/png",
         headers={"Content-Disposition": "inline"}
     )
@@ -147,15 +164,11 @@ def load_model_artifacts() -> None:
             PREPROCESSOR = joblib.load(pre_path)
             print("Loaded preprocessor")
         except AttributeError as e:
-            if '_RemainderColsList' in str(e):
+            if "_RemainderColsList" in str(e):
                 # Ensure compatibility shim is set up and try again
                 _setup_sklearn_compatibility()
-                try:
-                    PREPROCESSOR = joblib.load(pre_path)
-                    print("Loaded preprocessor (with compatibility mode)")
-                except Exception as e2:
-                    print(f"Error loading preprocessor even with compatibility shim: {e2}")
-                    raise
+                PREPROCESSOR = joblib.load(pre_path)
+                print("Loaded preprocessor (with compatibility mode)")
             else:
                 raise
     if le_path.exists():
@@ -801,9 +814,26 @@ def predict(req: PredictRequest) -> PredictResponse:
                 contrib = np.array(values).reshape(-1)
 
             groups = _group_shap_contributions(contrib)
+            # Try to generate a SHAP waterfall image for the predicted class
+            waterfall_url = None
+            try:
+                feature_names: List[str] = FEATURE_META.get("all_feature_names_after_pre", [])
+                exp = shap.Explanation(values=contrib, base_values=base_value, feature_names=feature_names)
+                fig = plt.figure(figsize=(8, 6))
+                shap.plots.waterfall(exp, max_display=15, show=False)
+                fname = f"{uuid.uuid4().hex}.png"
+                fpath = WATERFALLS_DIR / fname
+                plt.tight_layout()
+                fig.savefig(fpath, dpi=150, bbox_inches="tight")
+                plt.close(fig)
+                waterfall_url = f"/waterfalls/{fname}"
+            except Exception:
+                waterfall_url = None
+
             explanation = {
                 "target_class": decision,
                 "base_value": base_value,
+                "waterfall_url": waterfall_url,
                 **groups,
             }
         except Exception as e:

@@ -8,8 +8,8 @@
   "human_prediction": null,
   "last_name": "Tester",
   "first_name": "Anna",
-  "gender": "f",
-  "age": 25,
+  "gender": "m",
+  "age": 45,
   "birthdate": "1999-06-26",
   "marital_status": "single",
   "height_cm": 182,
@@ -40,5 +40,7 @@
     "sport_hours": "/dependency_plots/sport_hours.png"
   },
   "address": "a",
-  "occupation": "a"
+  "occupation": "a",
+  "sports": "None",
+  "medical_conditions": ""
 }

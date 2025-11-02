@@ -27,6 +27,6 @@ dependencies = [
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
-# Single-module layout (mjust uv aodule is `main.py` in the project root)
+# Single-module layout (module is `main.py` in the project root)
 [tool.setuptools]
 py-modules = ["main"]

@@ -186,39 +186,12 @@ export default function CaseDecision({ data, onBack }) {
   const toggleExpand = (cat) =>
     setExpandedCategory(expandedCategory === cat ? null : cat);
 
-  // Persisted SHAP-like impact values (stable across re-renders and page reloads)
-  const SHAP_STORAGE_KEY = "shapImpacts_v1";
-  const [shapImpacts, setShapImpacts] = useState(() => {
-    try {
-      const raw = localStorage.getItem(SHAP_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const categoryKeys = Object.keys(applicantData.categories);
-        const hasAll = categoryKeys.every((k) => typeof parsed[k] !== "undefined");
-        if (hasAll) return parsed;
-      }
-    } catch (e) {
-      // ignore and regenerate on error
-    }
-
-    const generated = Object.keys(applicantData.categories).reduce((acc, key) => {
-      acc[key] = parseFloat((Math.random() * 2 - 1).toFixed(2)); // -1 to 1 numeric
-      return acc;
-    }, {});
-
-    try { localStorage.setItem(SHAP_STORAGE_KEY, JSON.stringify(generated)); } catch {}
-
-    return generated;
-  });
+  // SHAP impacts start empty; they will be filled after a successful model run.
+  const [shapImpacts, setShapImpacts] = useState({});
 
   const updateShapImpacts = (newMap) => {
-    try {
-      const merged = { ...shapImpacts, ...newMap };
-      localStorage.setItem(SHAP_STORAGE_KEY, JSON.stringify(merged));
-      setShapImpacts(merged);
-    } catch {
-      setShapImpacts({ ...shapImpacts, ...newMap });
-    }
+    // Merge backend-provided values; no localStorage or placeholders.
+    setShapImpacts((prev) => ({ ...prev, ...newMap }));
   };
 
 const getImpactColor = (value) => {
@@ -324,7 +297,8 @@ const getImpactColor = (value) => {
         <h2>Risk Factor Details</h2>
         {Object.entries(applicantData.categories).map(([category, qaList]) => {
           const shapValue = shapImpacts[category];
-          const color = getImpactColor(shapValue); // <-- add this
+          const hasValue = typeof shapValue === 'number' && Number.isFinite(shapValue);
+          const color = hasValue ? getImpactColor(shapValue) : "#cccccc";
             return (
             <div key={category} style={{ marginBottom: "1rem" }}>
               <button
@@ -348,33 +322,42 @@ const getImpactColor = (value) => {
                 {category} {expandedCategory === category ? "▲" : "▼"}
               </span>
 
-              {/* Mock SHAP mini-plot */}
+              {/* Per-category SHAP mini-plot (shown after model run) */}
               <div
                 style={{
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  minWidth: "120px",
+                  justifyContent: "flex-end"
                 }}
               >
-                <div
-                style={{
-                  position: "relative",
-                  height: "18px",
-                  width: getBarWidth(shapValue),
-                  backgroundColor: color,
-                  clipPath:
-                  shapValue > 0
-                    ? "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%)"
-                    : "polygon(10% 0%, 100% 0%, 100% 100%, 10% 100%, 0% 50%)",
-                  borderRadius: "3px",
-                  transition: "width 0.3s ease",
-                }}
-                ></div>
-                <span style={{ fontSize: "0.8rem", color: "#4c4848ff" }}>
-                {shapValue > 0 ? "+" : ""}
-                {shapValue}
-                </span>
+                {hasValue ? (
+                  <>
+                    <div
+                      style={{
+                        position: "relative",
+                        height: "18px",
+                        width: getBarWidth(shapValue),
+                        backgroundColor: color,
+                        clipPath:
+                          shapValue > 0
+                            ? "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%)"
+                            : "polygon(10% 0%, 100% 0%, 100% 100%, 10% 100%, 0% 50%)",
+                        borderRadius: "3px",
+                        transition: "width 0.3s ease",
+                      }}
+                    ></div>
+                    <span style={{ fontSize: "0.8rem", color: "#4c4848ff" }}>
+                      {shapValue > 0 ? "+" : ""}
+                      {shapValue}
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ fontSize: "0.8rem", color: "#6b7280", fontStyle: "italic" }}>
+                  </span>
+                )}
               </div>
               </button>
 
@@ -453,8 +436,8 @@ const getImpactColor = (value) => {
         })}
       </section>
 
-      {/* Optional server-side SHAP summary for this client */}
-      {lastResult?.explanation?.top_features && (
+      {/* Server-rendered SHAP waterfall image (from backend) */}
+      {lastResult?.explanation?.waterfall_url && (
         <section
           style={{
             backgroundColor: "#eef6ff",
@@ -464,34 +447,16 @@ const getImpactColor = (value) => {
             border: "1px solid #d6e9ff"
           }}
         >
-          <h2>SHAP Waterfall (top contributors)</h2>
+          <h2>SHAP Waterfall</h2>
           <p style={{ marginTop: 0, color: "#4a5568" }}>
             Target class: <strong>{lastResult.explanation.target_class}</strong>
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {lastResult.explanation.top_features.slice(0, 12).map((f, idx) => {
-              const val = Number(f.impact || 0);
-              const pos = val >= 0;
-              const width = Math.min(100, Math.round(Math.abs(val) * 100));
-              return (
-                <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: "0 0 240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.feature}</div>
-                  <div style={{ flex: 1, height: 12, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, position: "relative" }}>
-                    <div style={{
-                      position: "absolute",
-                      left: pos ? 0 : `calc(50% - ${width/2}%)`,
-                      right: pos ? undefined : undefined,
-                      height: "100%",
-                      width: `${width}%`,
-                      background: pos ? "#ef4444" : "#10b981",
-                      borderRadius: 6,
-                      transform: pos ? "translateX(0)" : "translateX(0)"
-                    }} />
-                  </div>
-                  <div style={{ width: 70, textAlign: "right", color: "#374151" }}>{val.toFixed(3)}</div>
-                </div>
-              );
-            })}
+          <div style={{ width: "100%", overflowX: "auto" }}>
+            <img
+              src={lastResult.explanation.waterfall_url}
+              alt="SHAP Waterfall"
+              style={{ width: "min(720px, 100%)", height: "auto", borderRadius: 6, border: "1px solid #d6e9ff", display: "block", margin: "0 auto" }}
+            />
           </div>
         </section>
       )}
@@ -524,48 +489,6 @@ const getImpactColor = (value) => {
       </p>
     </div>
 
-    {/* Right: consolidated SHAP summary mock */}
-    <div style={{ flex: 1, minWidth: "280px" }}>
-      <h3 style={{ marginBottom: "0.5rem" }}>Feature Contributions</h3>
-      {consolidatedSHAP.map(([feature, value]) => {
-        const color = getImpactColor(value);
-        return (
-          <div
-            key={feature}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginBottom: "6px",
-              gap: "8px",
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.abs(value) * 80 + 20}px`,
-                height: "16px",
-                backgroundColor: color,
-                clipPath:
-                  value > 0
-                    ? "polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%)"
-                    : "polygon(10% 0%, 100% 0%, 100% 100%, 10% 100%, 0% 50%)",
-                borderRadius: "3px",
-              }}
-            ></div>
-            <span
-              style={{
-                fontSize: "0.85rem",
-                color,
-                fontWeight: "bold",
-              }}
-            >
-              {value > 0 ? "+" : ""}
-              {value}
-            </span>
-            <span style={{ fontSize: "0.8rem", color: "#333" }}>{feature}</span>
-          </div>
-        );
-      })}
-    </div>
   </div>
   </section>
       <section>
