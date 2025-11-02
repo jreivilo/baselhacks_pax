@@ -299,6 +299,7 @@ async def process_pdf_with_workflow(pdf_content: bytes) -> Dict[str, Any]:
             "abroad_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
             "dangerous_sports": random.choice([True, False]),
             "sport_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
+            "medical_conditions": random.choice(["Asthma", "Diabetes", "Herzkrankheit"]),
             "medical_issue": random.choice([True, False]),
             "medical_type": random.choice(["safe", "warning", "danger", "unknown"]) if random.random() > 0.5 else None,
             "doctor_visits": random.choice([True, False]),
@@ -335,6 +336,9 @@ async def process_pdf_with_workflow(pdf_content: bytes) -> Dict[str, Any]:
 class DocumentData(BaseModel):
     id: str
     filename: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    medical_conditions: Optional[str] = None
     name: Optional[str] = None  # Display name for the document/case
     gender: Optional[str] = None  # "m", "f", "other"
     age: Optional[int] = None
@@ -532,7 +536,7 @@ async def upload_document(files: List[UploadFile] = File(...)) -> Dict[str, Any]
             if 'first_name' in workflow_result:
                 extracted_data['first_name'] = workflow_result.get('first_name')
             
-            for key in ['gender', 'age', 'birthdate', 'marital_status', 'height_cm', 'weight_kg', 
+            for key in ['first_name', 'last_name', 'medical_conditions','gender', 'age', 'birthdate', 'marital_status', 'height_cm', 'weight_kg',
                        'bmi', 'smoking', 'packs_per_week', 'drug_use', 'drug_frequency', 'drug_type',
                        'staying_abroad', 'abroad_type', 'dangerous_sports', 'sport_type', 
                        'medical_issue', 'medical_type', 'doctor_visits', 'visit_type', 

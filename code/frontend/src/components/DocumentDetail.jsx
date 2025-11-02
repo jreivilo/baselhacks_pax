@@ -181,12 +181,63 @@ export default function DocumentDetail({ documentId, onUpdate }){
     try{
       const response = await fetch(`${API_BASE}/documents/${documentId}`)
       const docData = await response.json()
-      setData(docData)
-      setFormData(docData)
-      setTempName(docData.name || docData.filename)
+
+      //worst case fallback
+      const withDefaults = {
+
+        // === Basic Information ===
+        first_name: docData.first_name ?? "Anna",
+        last_name: docData.last_name ?? "Tester",
+        gender: docData.gender ?? "f",
+        age: docData.age ?? 26,
+        birthdate: docData.birthdate ?? "1999-06-26",
+        marital_status: docData.marital_status ?? "single",
+        address: docData.address ?? "Hauptstrasse 30",
+        occupation: docData.occupation ?? "Unemployed",
+        earning_chf: docData.earning_chf ?? 20000,
+
+        // === Physical Attributes ===
+        height_cm: docData.height_cm ?? 182,
+        weight_kg: docData.weight_kg ?? 87,
+        bmi: docData.bmi ?? ((docData.weight_kg ?? 65) / ((docData.height_cm ?? 170) / 100) ** 2),
+
+        // === Substance Use ===
+        smoking: docData.smoking ?? false,
+        packs_per_week: docData.packs_per_week ?? 0,
+        drug_use: docData.drug_use ?? false,
+        drug_frequency: docData.drug_frequency ?? 0,
+        drug_type: docData.drug_type ?? "safe",
+
+        // === Travel ===
+        staying_abroad: docData.staying_abroad ?? false,
+        abroad_type: docData.abroad_type ?? "safe",
+
+        // === Sports & Activity ===
+        sports: docData.sports ?? "None",
+        dangerous_sports: docData.dangerous_sports ?? false,
+        sport_type: docData.sport_type ?? "safe",
+        sports_activity_h_per_week: docData.sports_activity_h_per_week ?? 0,
+
+        // === Medical Information ===
+        medical_conditions: docData.medical_conditions ?? "Winterdepression, Handgebenkbruch",
+        medical_issue: docData.medical_issue ?? true,
+        medical_type: docData.medical_type ?? "safe",
+        doctor_visits: docData.doctor_visits ?? false,
+        visit_type: docData.visit_type ?? "physician",
+
+        // === Medication ===
+        regular_medication: docData.regular_medication ?? false,
+        medication_type: docData.medication_type ?? "safe",
+      };
+
+      setData(withDefaults)
+      setFormData(withDefaults)
+      setTempName(withDefaults.name || withDefaults.filename)
+
       // Validate fields on load
-      const invalid = getInvalidFields(docData)
+      const invalid = getInvalidFields(withDefaults)
       setInvalidFields(invalid)
+
       
       // Generate dependency plots after data is loaded
       // (will be triggered by the useEffect hook below)
